@@ -1,0 +1,14 @@
+# Runtime logs
+*.log
+
+# Leaderboard store written by server.js
+data/
+
+# Dependencies (none today, but keep the door shut)
+node_modules/
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

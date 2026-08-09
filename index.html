@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#08111f" />
+  <title>Neon Serpent 30</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-orb orb-a"></div>
+  <div class="bg-orb orb-b"></div>
+  <div class="bg-grid"></div>
+
+  <main class="shell">
+    <header class="topbar glass">
+      <div>
+        <p class="eyebrow">Playable challenge ladder</p>
+        <h1>Neon Serpent 30</h1>
+        <p class="subtitle">A tougher, faster, more modern snake game with 30 handcrafted levels, daily challenge seeds, traps, drones, and leaderboard-ready scoring.</p>
+      </div>
+      <div class="top-actions">
+        <button id="campaignBtn" class="chip active">Campaign</button>
+        <button id="dailyBtn" class="chip">Daily Rift</button>
+        <button id="pauseBtn" class="chip">Pause</button>
+        <button id="soundBtn" class="chip" aria-pressed="true" title="Toggle sound (M)">Sound on</button>
+        <button id="paletteBtn" class="chip" aria-pressed="false" title="Toggle colorblind-safe palette (C)">Neon palette</button>
+        <button id="restartBtn" class="chip danger">Restart</button>
+      </div>
+    </header>
+
+    <section class="layout">
+      <article class="arena glass">
+        <div class="arena-header">
+          <div class="stat-pill"><span>Level</span><strong id="levelLabel">1</strong></div>
+          <div class="stat-pill"><span>Score</span><strong id="scoreLabel">0</strong></div>
+          <div class="stat-pill"><span>Lives</span><strong id="livesLabel">3</strong></div>
+          <div class="stat-pill"><span>Checkpoint</span><strong id="checkpointLabel">1</strong></div>
+          <div class="stat-pill"><span>Seed</span><strong id="seedLabel">Campaign</strong></div>
+        </div>
+
+        <div class="canvas-shell">
+          <canvas id="gameCanvas" width="960" height="640" aria-label="Snake game board"></canvas>
+          <div id="overlay" class="overlay visible">
+            <div class="overlay-card">
+              <p class="overlay-kicker">Tap to start</p>
+              <h2>Outsmart the grid</h2>
+              <p id="overlayText">Collect neon cores, dodge drones, survive portals, and clear all 30 levels. Arrow keys, WASD, swipe, or the on-screen pad all work.</p>
+              <div class="overlay-actions">
+                <button id="playBtn" class="primary">Start Game</button>
+                <button id="checkpointBtn" class="secondary is-hidden">Resume at checkpoint</button>
+                <button id="dailyCopyBtn" class="secondary">Copy Daily Code</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="touch-controls">
+          <div></div>
+          <button data-dir="up" class="pad-btn" aria-label="Move up">&#9650;</button>
+          <div></div>
+          <button data-dir="left" class="pad-btn" aria-label="Move left">&#9664;</button>
+          <button data-dir="down" class="pad-btn" aria-label="Move down">&#9679;</button>
+          <button data-dir="right" class="pad-btn" aria-label="Move right">&#9654;</button>
+        </div>
+        <p class="mini-note pad-note">On a phone you can also swipe anywhere on the board.</p>
+      </article>
+
+      <aside class="sidebar">
+        <section class="panel glass">
+          <h3>Current Level</h3>
+          <p id="levelName" class="panel-title">Spark Start</p>
+          <p id="levelDesc" class="panel-copy">Slow warm-up with a few obstacles.</p>
+          <ul id="modifierList" class="modifier-list"></ul>
+        </section>
+
+        <section class="panel glass">
+          <h3>Mission</h3>
+          <p id="missionText" class="panel-copy">Collect 3 cores to unlock the next level.</p>
+          <div class="mission-meter">
+            <div id="missionFill" class="mission-fill"></div>
+          </div>
+          <p class="mini-note" id="timerText">No time limit on this stage.</p>
+        </section>
+
+        <section class="panel glass">
+          <h3>Boosts &amp; Hazards</h3>
+          <div class="legend-grid">
+            <div><span class="glyph food"></span> Core &mdash; circle</div>
+            <div><span class="glyph shield"></span> Shield &mdash; hexagon</div>
+            <div><span class="glyph slow"></span> Time warp &mdash; triangle</div>
+            <div><span class="glyph bonus"></span> Score boost &mdash; star</div>
+            <div><span class="glyph hazard"></span> Drone &mdash; spiked diamond</div>
+            <div><span class="glyph enemy"></span> Rival snake &mdash; square</div>
+            <div><span class="glyph portal"></span> Portal &mdash; ring</div>
+          </div>
+          <p class="mini-note">Every object has its own shape, so the board stays readable without relying on colour alone.</p>
+        </section>
+
+        <section class="panel glass">
+          <h3>Challenge Code</h3>
+          <p id="challengeCode" class="code-block">Campaign mode</p>
+          <button id="copyCodeBtn" class="secondary full">Copy code</button>
+          <p class="mini-note">Daily Rift uses a shared seed so everyone gets the same challenge and can compare scores.</p>
+        </section>
+
+        <section class="panel glass">
+          <h3>Leaderboard</h3>
+          <div class="lb-tabs">
+            <button id="lbCampaignTab" class="mini-tab active">Campaign</button>
+            <button id="lbDailyTab" class="mini-tab">Daily Rift</button>
+          </div>
+          <ol id="leaderboardList" class="lb-list"><li class="lb-empty">Loading&hellip;</li></ol>
+          <label class="lb-label" for="playerName">Post your runs as</label>
+          <div class="lb-name-row">
+            <input id="playerName" class="lb-input" maxlength="24" placeholder="Pick a name" autocomplete="off" spellcheck="false" />
+            <button id="saveNameBtn" class="secondary">Save</button>
+          </div>
+          <p id="lbStatus" class="mini-note">Set a name and finished runs post automatically.</p>
+        </section>
+
+        <section class="panel glass">
+          <h3>Best Scores</h3>
+          <div class="score-row"><span>Campaign</span><strong id="bestCampaign">0</strong></div>
+          <div class="score-row"><span>Daily Rift</span><strong id="bestDaily">0</strong></div>
+          <div class="score-row"><span>Highest level</span><strong id="bestLevel">1</strong></div>
+        </section>
+      </aside>
+    </section>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>
