@@ -22,6 +22,12 @@
   --c-hazard: #ff5d76;
   --c-enemy: #a98bff;
   --c-portal: #57f8ff;
+
+  /* Difficulty tier accents, used by the level select. */
+  --tier-easy: #63ff95;
+  --tier-hard: #57f8ff;
+  --tier-super: #ffd56a;
+  --tier-promax: #ff5d76;
 }
 
 /* Okabe-Ito derived, colourblind-safe alternative. Toggled from the header. */
@@ -39,6 +45,11 @@ body.palette-accessible {
   --c-hazard: #d55e00;
   --c-enemy: #cc79a7;
   --c-portal: #56b4e9;
+
+  --tier-easy: #009e73;
+  --tier-hard: #56b4e9;
+  --tier-super: #e69f00;
+  --tier-promax: #d55e00;
 }
 
 * {
@@ -564,6 +575,210 @@ canvas {
 .mini-tab:focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------
+ * Level select
+ * ------------------------------------------------------------------ */
+.level-select {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  place-items: center;
+  padding: 20px;
+  background: rgba(3, 7, 14, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.level-select.is-open {
+  display: grid;
+}
+
+.ls-panel {
+  width: min(1080px, 100%);
+  max-height: min(88vh, 900px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: 28px;
+}
+
+.ls-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.ls-heading h2 {
+  margin: 0;
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+}
+
+.ls-progress {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.ls-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.ls-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.ls-toggle small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.ls-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--cyan);
+  cursor: pointer;
+}
+
+.ls-tiers {
+  display: grid;
+  gap: 22px;
+}
+
+.ls-tier {
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--tier-color, var(--line));
+  border-left-width: 4px;
+}
+
+.ls-tier-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.ls-tier-head h3 {
+  margin: 0;
+  color: var(--tier-color, var(--cyan));
+  font-size: 1.2rem;
+  letter-spacing: 0.02em;
+}
+
+.ls-tier-range {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.ls-tier-count {
+  margin-left: auto;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.ls-tier-blurb {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.ls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 10px;
+}
+
+.ls-card {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 12px 13px;
+  border-radius: 16px;
+  text-align: left;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.ls-card:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: var(--tier-color, var(--cyan));
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.ls-card:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.ls-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ls-num {
+  color: var(--tier-color, var(--cyan));
+  font-weight: 700;
+  font-size: 0.94rem;
+}
+
+.ls-badge {
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.ls-card-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ls-card-meta {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.ls-card.is-done {
+  border-color: rgba(99, 255, 149, 0.34);
+  background: rgba(99, 255, 149, 0.08);
+}
+
+.ls-card.is-next {
+  border-color: var(--tier-color, var(--cyan));
+  box-shadow: 0 0 0 1px var(--tier-color, var(--cyan)) inset;
+}
+
+.ls-card.is-practice {
+  border-style: dashed;
 }
 
 .bg-orb {

@@ -27,11 +27,30 @@ the leaderboard panel just reports that it is offline.
 | On-screen D-pad | Steer |
 | Space or `P` | Pause / resume |
 | `R` | Restart |
+| `L` | Open / close level select |
+| `Esc` | Close level select |
 | `M` | Mute / unmute |
 | `C` | Toggle the colourblind-safe palette |
 
+## Difficulty tiers
+
+The 30 levels are grouped by where the game actually changes shape:
+
+| Tier | Levels | What arrives |
+| --- | --- | --- |
+| Easy | 1–8 | Gentle speeds and simple layouts; first drones and portals near the end |
+| Hard | 9–16 | Portals, inverted controls, stage timers, first rival snakes |
+| Super Hard | 17–24 | Drone packs, multiple rivals, and from 21 a closing arena |
+| Hard Pro Max | 25–30 | Spiral and fortress mazes, up to four rivals, minimal margin |
+
 ## Features
 
+- **Level select** (the *Levels* button, or `L`) showing all 30 levels by tier,
+  each with its speed, drone/rival counts and modifiers. Levels unlock one at a
+  time as you clear the previous one, and cleared levels keep a per-level best.
+- **Practice mode** — a toggle in the level select opens every level immediately
+  so any stage can be tested in isolation. Runs that do not start from level 1
+  are kept out of the leaderboard, so practice cannot inflate the board.
 - **30 levels** on a ramping difficulty curve — 200 ms down to 76 ms per move,
   with obstacles, drones, portals, rivals, timers and a closing arena layered in
   gradually.

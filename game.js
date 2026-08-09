@@ -37,6 +37,13 @@
   const lbStatus = document.getElementById("lbStatus");
   const playerNameInput = document.getElementById("playerName");
   const saveNameBtn = document.getElementById("saveNameBtn");
+  const levelsBtn = document.getElementById("levelsBtn");
+  const overlayLevelsBtn = document.getElementById("overlayLevelsBtn");
+  const levelSelect = document.getElementById("levelSelect");
+  const lsTiers = document.getElementById("lsTiers");
+  const lsProgress = document.getElementById("lsProgress");
+  const lsCloseBtn = document.getElementById("lsCloseBtn");
+  const unlockAllToggle = document.getElementById("unlockAllToggle");
 
   const storageKey = "neon-serpent-save-v1";
   const GRID = { cols: 30, rows: 20 };
@@ -282,6 +289,44 @@
     { name: "Singularity Prime", desc: "The final stage. Tight, hostile, and very little room for mistakes.", speed: 76, target: 10, layout: "boss", walls: 28, hazards: 6, enemies: 4, portals: 2, powerups: 1, timer: 40, reverse: true, shrink: 6 }
   ];
 
+  /* Difficulty tiers. The boundaries follow where the game actually changes
+     shape: drones and portals arrive by 8, rivals and timers by 16, the
+     arena starts closing at 21, and the last six are the endurance run. */
+  const TIERS = [
+    {
+      id: "easy",
+      name: "Easy",
+      from: 0,
+      to: 7,
+      blurb: "Learn the board. Gentle speeds, simple layouts, and the first drones and portals near the end."
+    },
+    {
+      id: "hard",
+      name: "Hard",
+      from: 8,
+      to: 15,
+      blurb: "Portals, inverted controls, stage timers and the first rival snakes hunting you down."
+    },
+    {
+      id: "super",
+      name: "Super Hard",
+      from: 16,
+      to: 23,
+      blurb: "Multiple rivals and drone packs, tighter countdowns, and from level 21 the arena starts closing in."
+    },
+    {
+      id: "promax",
+      name: "Hard Pro Max",
+      from: 24,
+      to: 29,
+      blurb: "Spiral and fortress mazes, up to four rivals, a shrinking board and almost no margin for error."
+    }
+  ];
+
+  function tierForLevel(levelIndex) {
+    return TIERS.find((tier) => levelIndex >= tier.from && levelIndex <= tier.to) || TIERS[0];
+  }
+
   const state = {
     mode: "campaign",
     running: false,
@@ -331,7 +376,15 @@
     checkpoint: null,
     savedCheckpoint: null,
     leaderboardTab: "campaign",
-    leaderboardOnline: true
+    leaderboardOnline: true,
+    // Highest level index the player has earned access to.
+    unlockedLevel: 0,
+    // Per level: { completed, best } keyed by level index.
+    levelStats: {},
+    // Practice mode makes every level clickable for testing.
+    unlockAll: false,
+    // Runs that do not start at level 1 stay off the leaderboard.
+    runStartLevel: 0
   };
 
   loadSave();
@@ -340,6 +393,7 @@
   audio.enabled = state.soundEnabled !== false;
   soundBtn.setAttribute("aria-pressed", audio.enabled ? "true" : "false");
   playerNameInput.value = state.playerName;
+  unlockAllToggle.checked = state.unlockAll;
   updateBestDisplay();
   resizeCanvas();
   window.addEventListener("resize", resizeCanvas);
@@ -378,6 +432,19 @@
   });
   lbCampaignTab.addEventListener("click", () => setLeaderboardTab("campaign"));
   lbDailyTab.addEventListener("click", () => setLeaderboardTab("daily"));
+  levelsBtn.addEventListener("click", openLevelSelect);
+  overlayLevelsBtn.addEventListener("click", openLevelSelect);
+  lsCloseBtn.addEventListener("click", closeLevelSelect);
+  levelSelect.addEventListener("click", (event) => {
+    // Click-outside dismiss.
+    if (event.target === levelSelect) closeLevelSelect();
+  });
+  unlockAllToggle.addEventListener("change", () => {
+    state.unlockAll = unlockAllToggle.checked;
+    savePreferences();
+    renderLevelSelect();
+    audio.play("ui");
+  });
 
   state.running = false;
   state.paused = false;
@@ -389,6 +456,194 @@
   updateUI();
   refreshLeaderboard();
   requestAnimationFrame(loop);
+
+  /* ------------------------------------------------------------------
+   * Level select
+   * --------------------------------------------------------------- */
+  function isLevelUnlocked(levelIndex) {
+    return state.unlockAll || levelIndex <= state.unlockedLevel;
+  }
+
+  function levelStat(levelIndex) {
+    return state.levelStats[levelIndex] || { completed: false, best: 0 };
+  }
+
+  function openLevelSelect() {
+    audio.init();
+    audio.play("ui");
+    unlockAllToggle.checked = state.unlockAll;
+    renderLevelSelect();
+    levelSelect.classList.add("is-open");
+    // Pause a live run so the board is not ticking away behind the dialog.
+    if (state.running && !state.paused && !state.over && !state.won) {
+      togglePause();
+    }
+    lsCloseBtn.focus();
+  }
+
+  function closeLevelSelect() {
+    levelSelect.classList.remove("is-open");
+  }
+
+  function renderLevelSelect() {
+    const unlockedCount = state.unlockAll
+      ? LEVELS.length
+      : Math.min(LEVELS.length, state.unlockedLevel + 1);
+    const clearedCount = Object.values(state.levelStats).filter((s) => s.completed).length;
+
+    lsProgress.textContent = state.unlockAll
+      ? `Practice mode — all ${LEVELS.length} levels open · ${clearedCount} cleared`
+      : `${unlockedCount} of ${LEVELS.length} unlocked · ${clearedCount} cleared`;
+
+    lsTiers.innerHTML = "";
+
+    for (const tier of TIERS) {
+      const section = document.createElement("section");
+      section.className = "ls-tier";
+      section.style.setProperty("--tier-color", `var(--tier-${tier.id})`);
+
+      const head = document.createElement("header");
+      head.className = "ls-tier-head";
+
+      const title = document.createElement("h3");
+      title.textContent = tier.name;
+
+      const range = document.createElement("span");
+      range.className = "ls-tier-range";
+      range.textContent = `Levels ${tier.from + 1}–${tier.to + 1}`;
+
+      const total = tier.to - tier.from + 1;
+      let done = 0;
+      for (let i = tier.from; i <= tier.to; i++) {
+        if (levelStat(i).completed) done++;
+      }
+      const count = document.createElement("span");
+      count.className = "ls-tier-count";
+      count.textContent = `${done}/${total} cleared`;
+
+      head.append(title, range, count);
+
+      const blurb = document.createElement("p");
+      blurb.className = "ls-tier-blurb";
+      blurb.textContent = tier.blurb;
+
+      const grid = document.createElement("div");
+      grid.className = "ls-grid";
+      for (let i = tier.from; i <= tier.to; i++) {
+        grid.appendChild(buildLevelCard(i));
+      }
+
+      section.append(head, blurb, grid);
+      lsTiers.appendChild(section);
+    }
+  }
+
+  function buildLevelCard(levelIndex) {
+    const level = LEVELS[levelIndex];
+    const stat = levelStat(levelIndex);
+    const unlocked = isLevelUnlocked(levelIndex);
+    const earned = levelIndex <= state.unlockedLevel;
+    const isNext = !stat.completed && earned;
+
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "ls-card";
+    card.disabled = !unlocked;
+    if (stat.completed) card.classList.add("is-done");
+    if (isNext) card.classList.add("is-next");
+    // Dashed border marks a level only reachable because practice mode is on.
+    if (unlocked && !earned) card.classList.add("is-practice");
+
+    const top = document.createElement("div");
+    top.className = "ls-card-top";
+
+    const num = document.createElement("span");
+    num.className = "ls-num";
+    num.textContent = `Level ${levelIndex + 1}`;
+
+    const badge = document.createElement("span");
+    badge.className = "ls-badge";
+    badge.textContent = !unlocked ? "🔒" : stat.completed ? "✓" : isNext ? "▶" : "◇";
+
+    top.append(num, badge);
+
+    const name = document.createElement("span");
+    name.className = "ls-card-name";
+    name.textContent = level.name;
+
+    const meta = document.createElement("span");
+    meta.className = "ls-card-meta";
+    meta.textContent = describeLevel(levelIndex);
+
+    card.append(top, name, meta);
+
+    if (stat.best > 0) {
+      const best = document.createElement("span");
+      best.className = "ls-card-meta";
+      best.textContent = `Best ${formatNumber(stat.best)}`;
+      card.appendChild(best);
+    }
+
+    card.title = unlocked
+      ? `${level.name} — ${level.desc}`
+      : `Locked. Clear level ${levelIndex} to unlock.`;
+
+    if (unlocked) {
+      card.addEventListener("click", () => startAtLevel(levelIndex));
+    }
+    return card;
+  }
+
+  // Compact one-line summary of what makes a level distinct.
+  function describeLevel(levelIndex) {
+    const level = LEVELS[levelIndex];
+    const parts = [`${Math.round(1000 / level.speed)}/s`];
+    if (level.hazards) parts.push(`${level.hazards} drone${level.hazards > 1 ? "s" : ""}`);
+    if (level.enemies) parts.push(`${level.enemies} rival${level.enemies > 1 ? "s" : ""}`);
+    if (level.portals) parts.push("portals");
+    if (level.reverse) parts.push("inverted");
+    if (level.timer) parts.push(`${level.timer}s`);
+    if (level.shrink) parts.push("shrinking");
+    return parts.join(" · ");
+  }
+
+  function startAtLevel(levelIndex) {
+    if (!isLevelUnlocked(levelIndex)) return;
+    audio.init();
+    audio.play("ui");
+    closeLevelSelect();
+
+    if (state.mode !== "campaign") setMode("campaign");
+
+    state.runStartLevel = levelIndex;
+    resetRun();
+    state.running = true;
+    state.paused = false;
+    overlay.classList.remove("visible");
+    overlayKicker.textContent = "Live run";
+    pauseBtn.textContent = "Pause";
+    playBtn.textContent = "Start Game";
+    state.message = levelIndex === 0
+      ? "Good luck. Stay in motion."
+      : `Practice run from level ${levelIndex + 1}. This one will not be posted.`;
+    updateUI();
+  }
+
+  function recordLevelCleared(levelIndex, scoreAtClear) {
+    const previous = levelStat(levelIndex);
+    state.levelStats[levelIndex] = {
+      completed: true,
+      best: Math.max(previous.best || 0, Math.floor(scoreAtClear))
+    };
+    // Each level unlocks exactly the next one.
+    if (levelIndex + 1 < LEVELS.length) {
+      state.unlockedLevel = Math.max(state.unlockedLevel, levelIndex + 1);
+    }
+  }
+
+  function isPracticeRun() {
+    return state.runStartLevel > 0;
+  }
 
   function toggleSound() {
     audio.enabled = !audio.enabled;
@@ -532,7 +787,7 @@
     state.floating = [];
     state.checkpoint = null;
     reseedRun();
-    loadLevel(0);
+    loadLevel(state.runStartLevel || 0);
     refreshCheckpointButton();
   }
 
@@ -549,7 +804,9 @@
   /* Checkpoints land on every 5th level. Losing your last life rewinds to the
      most recent one instead of throwing away a 25-level run. */
   function isCheckpointLevel(levelIndex) {
-    return levelIndex % CHECKPOINT_EVERY === 0;
+    // The level a run starts on always counts, so a practice run that begins
+    // mid-ladder still has somewhere to fall back to.
+    return levelIndex % CHECKPOINT_EVERY === 0 || levelIndex === state.runStartLevel;
   }
 
   function captureCheckpoint(levelIndex) {
@@ -1204,6 +1461,18 @@
     const keyName = event.key.toLowerCase();
     audio.init();
 
+    if (keyName === "escape") {
+      closeLevelSelect();
+      return;
+    }
+    if (keyName === "l") {
+      if (levelSelect.classList.contains("is-open")) closeLevelSelect();
+      else openLevelSelect();
+      return;
+    }
+    // Everything below steers or controls a run, which the dialog blocks.
+    if (levelSelect.classList.contains("is-open")) return;
+
     if (keyName === " " || keyName === "p") {
       event.preventDefault();
       togglePause();
@@ -1652,6 +1921,7 @@
   function levelComplete() {
     state.score += state.missionClearBonus;
     state.bestLevel = Math.max(state.bestLevel, state.levelIndex + 2);
+    recordLevelCleared(state.levelIndex, state.score);
     const clearedCount = state.levelIndex + 1;
 
     if (clearedCount >= LEVELS.length) {
@@ -1678,6 +1948,7 @@
     }
 
     saveProgress();
+    if (levelSelect.classList.contains("is-open")) renderLevelSelect();
     loadLevel(state.levelIndex + 1);
   }
 
@@ -2223,7 +2494,10 @@
     }
     const timerValue = state.timerLeft == null ? "No time limit on this stage." : `${Math.ceil(state.timerLeft)}s remaining.`;
     timerText.textContent = timerValue;
-    missionText.textContent = `Collect ${state.missionGoal} cores to unlock the next level. ${state.currentLevel?.reverse ? "Controls are inverted on this stage." : ""}`;
+    const missionBits = [`Collect ${state.missionGoal} cores to unlock the next level.`];
+    if (state.currentLevel?.reverse) missionBits.push("Controls are inverted on this stage.");
+    if (isPracticeRun()) missionBits.push(`Practice run from level ${state.runStartLevel + 1} — not posted.`);
+    missionText.textContent = missionBits.join(" ");
     const progress = Math.max(0, Math.min(1, state.missionGoal ? state.mission / state.missionGoal : 0));
     missionFill.style.width = `${Math.floor(progress * 100)}%`;
   }
@@ -2234,6 +2508,7 @@
     levelDesc.textContent = level.desc;
     modifierList.innerHTML = "";
     const modifiers = [
+      `Tier: ${tierForLevel(state.levelIndex).name}`,
       `Speed: ${Math.round(1000 / level.speed)} moves/sec`,
       `Layout: ${prettyLayout(level.layout)}`,
       `Drones: ${level.hazards}`,
@@ -2248,7 +2523,8 @@
       li.textContent = item;
       modifierList.appendChild(li);
     }
-    missionText.textContent = `Collect ${state.missionGoal} cores to unlock the next level.`;
+    // Mission copy is owned by updateHUD, which also appends the inverted-
+    // controls and practice-run notices. Setting it here would clobber them.
   }
 
   function updateUI() {
@@ -2323,10 +2599,29 @@
       palette: state.palette,
       soundEnabled: state.soundEnabled !== false,
       playerName: state.playerName || "",
-      checkpoint: state.checkpoint && state.checkpoint.level > 0 ? state.checkpoint : previous.checkpoint || null
+      checkpoint: state.checkpoint && state.checkpoint.level > 0 ? state.checkpoint : previous.checkpoint || null,
+      unlockedLevel: Math.max(state.unlockedLevel, previous.unlockedLevel || 0),
+      levelStats: mergeLevelStats(previous.levelStats, state.levelStats),
+      unlockAll: !!state.unlockAll
     };
     writeSave(snapshot);
     updateBestDisplay();
+  }
+
+  // Union of stored and in-memory per-level records, keeping the better score.
+  function mergeLevelStats(stored, current) {
+    const merged = {};
+    for (const source of [stored || {}, current || {}]) {
+      for (const [levelIndex, stat] of Object.entries(source)) {
+        if (!stat || typeof stat !== "object") continue;
+        const existing = merged[levelIndex] || { completed: false, best: 0 };
+        merged[levelIndex] = {
+          completed: existing.completed || !!stat.completed,
+          best: Math.max(existing.best || 0, Number(stat.best) || 0)
+        };
+      }
+    }
+    return merged;
   }
 
   // Preferences persist immediately; they must not wait on a run ending.
@@ -2336,7 +2631,8 @@
       ...previous,
       palette: state.palette,
       soundEnabled: state.soundEnabled !== false,
-      playerName: state.playerName || ""
+      playerName: state.playerName || "",
+      unlockAll: !!state.unlockAll
     });
   }
 
@@ -2351,6 +2647,13 @@
     state.savedCheckpoint = data.checkpoint && typeof data.checkpoint.level === "number"
       ? data.checkpoint
       : null;
+
+    const unlocked = Number(data.unlockedLevel);
+    state.unlockedLevel = Number.isFinite(unlocked)
+      ? Math.max(0, Math.min(LEVELS.length - 1, Math.floor(unlocked)))
+      : 0;
+    state.levelStats = mergeLevelStats(data.levelStats, {});
+    state.unlockAll = !!data.unlockAll;
   }
 
   function readSave() {
@@ -2454,6 +2757,12 @@
   }
 
   async function submitRun(levelReached) {
+    // Only full runs from level 1 count, otherwise starting at level 29 would
+    // post a score that nobody could compare against.
+    if (isPracticeRun()) {
+      lbStatus.textContent = `Practice run from level ${state.runStartLevel + 1} — not posted to the leaderboard.`;
+      return;
+    }
     if (!state.playerName) {
       lbStatus.textContent = "Set a name above to post this run to the leaderboard.";
       return;
@@ -2527,6 +2836,12 @@
     requestDirection,
     stepOnce: step,
     spawnFood,
+    TIERS,
+    isLevelUnlocked,
+    startAtLevel,
+    renderLevelSelect,
+    openLevelSelect,
+    closeLevelSelect,
     setSeed(seed) {
       state.mode = seed === "campaign" ? "campaign" : "daily";
       state.seed = seed;

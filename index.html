@@ -22,6 +22,7 @@
       <div class="top-actions">
         <button id="campaignBtn" class="chip active">Campaign</button>
         <button id="dailyBtn" class="chip">Daily Rift</button>
+        <button id="levelsBtn" class="chip">Levels</button>
         <button id="pauseBtn" class="chip">Pause</button>
         <button id="soundBtn" class="chip" aria-pressed="true" title="Toggle sound (M)">Sound on</button>
         <button id="paletteBtn" class="chip" aria-pressed="false" title="Toggle colorblind-safe palette (C)">Neon palette</button>
@@ -49,6 +50,7 @@
               <div class="overlay-actions">
                 <button id="playBtn" class="primary">Start Game</button>
                 <button id="checkpointBtn" class="secondary is-hidden">Resume at checkpoint</button>
+                <button id="overlayLevelsBtn" class="secondary">Choose level</button>
                 <button id="dailyCopyBtn" class="secondary">Copy Daily Code</button>
               </div>
             </div>
@@ -128,6 +130,32 @@
       </aside>
     </section>
   </main>
+
+  <div id="levelSelect" class="level-select" role="dialog" aria-modal="true" aria-labelledby="lsTitle">
+    <div class="ls-panel glass">
+      <header class="ls-header">
+        <div class="ls-heading">
+          <p class="eyebrow">Campaign ladder</p>
+          <h2 id="lsTitle">Level Select</h2>
+          <p id="lsProgress" class="ls-progress">1 of 30 unlocked</p>
+        </div>
+        <div class="ls-header-actions">
+          <label class="ls-toggle" for="unlockAllToggle">
+            <input type="checkbox" id="unlockAllToggle" />
+            <span>Unlock everything <small>practice mode</small></span>
+          </label>
+          <button id="lsCloseBtn" class="chip">Close</button>
+        </div>
+      </header>
+
+      <div id="lsTiers" class="ls-tiers"></div>
+
+      <p id="lsNote" class="mini-note">
+        Levels unlock one at a time as you clear them. Practice runs &mdash; anything not
+        started from level 1 &mdash; are kept out of the leaderboard so the board stays honest.
+      </p>
+    </div>
+  </div>
 
   <script src="game.js"></script>
 </body>
