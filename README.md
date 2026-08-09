@@ -34,14 +34,27 @@ the leaderboard panel just reports that it is offline.
 
 ## Difficulty tiers
 
-The 30 levels are grouped by where the game actually changes shape:
+Speed is a property of the tier, held constant across every level in it, so
+difficulty comes from the layout, drones, portals, timers and the closing arena
+rather than from a tempo that creeps up level by level.
 
-| Tier | Levels | What arrives |
-| --- | --- | --- |
-| Easy | 1–8 | Gentle speeds and simple layouts; first drones and portals near the end |
-| Hard | 9–16 | Portals, inverted controls, stage timers, first rival snakes |
-| Super Hard | 17–24 | Drone packs, multiple rivals, and from 21 a closing arena |
-| Hard Pro Max | 25–30 | Spiral and fortress mazes, up to four rivals, minimal margin |
+| Tier | Levels | Speed | What arrives |
+| --- | --- | --- | --- |
+| Easy | 1–8 | 4 moves/sec | Simple layouts, then the first drone and portal pair |
+| Hard | 9–16 | 5 moves/sec | Portals, stage timers, drone pairs, one mirrored stage |
+| Super Hard | 17–24 | 6 moves/sec | Drone packs, tight countdowns, closing arena from 21 |
+| Hard Pro Max | 25–30 | 7 moves/sec | Rival snakes, spiral and fortress mazes, minimal margin |
+
+**Rival snakes appear only in Hard Pro Max**, and always move
+`RIVAL_SPEED_DELTA` (2) steps per second slower than the player — 5/sec against
+your 7/sec. They run on their own accumulator rather than one move per player
+step, so the gap holds exactly regardless of tier speed.
+
+**Mirrored stages** (levels 10, 20 and 30) swap left and right but leave up and
+down alone. Flipping both axes meant every input had to be mentally reversed,
+which read as unfair rather than interesting; mirroring one axis keeps the idea
+while staying playable. Each mirrored stage announces itself on the board and in
+the mission panel.
 
 ## Features
 
@@ -51,9 +64,8 @@ The 30 levels are grouped by where the game actually changes shape:
 - **Practice mode** — a toggle in the level select opens every level immediately
   so any stage can be tested in isolation. Runs that do not start from level 1
   are kept out of the leaderboard, so practice cannot inflate the board.
-- **30 levels** on a ramping difficulty curve — 200 ms down to 76 ms per move,
-  with obstacles, drones, portals, rivals, timers and a closing arena layered in
-  gradually.
+- **30 levels** with obstacles, drones, portals, rivals, timers and a closing
+  arena layered in gradually across the four tiers.
 - **Checkpoints every 5 levels.** Losing your last life rewinds to the most recent
   checkpoint with the score you had entering it, rather than discarding the run.
   Clearing every 5th level also grants an extra life, capped at 5.

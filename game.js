@@ -256,37 +256,48 @@
     }
   };
 
+  /* Movement speed is a property of the tier, not the level: it is constant
+     across a category so difficulty comes from the layout, drones, portals,
+     timers and the closing arena rather than from a creeping tempo.
+     Rival snakes belong to the final tier only. */
   const LEVELS = [
-    { name: "Spark Start", desc: "Warm-up with a soft pace and a few anchored blocks.", speed: 200, target: 3, layout: "open", walls: 4, hazards: 0, enemies: 0, portals: 0, powerups: 1, timer: null, reverse: false, shrink: 0 },
-    { name: "Neon Drift", desc: "A bright open lane with light obstacles and no boxed-in sections.", speed: 192, target: 4, layout: "boulevard", walls: 8, hazards: 0, enemies: 0, portals: 0, powerups: 1, timer: null, reverse: false, shrink: 0 },
-    { name: "Byte Bloom", desc: "Lane walls appear and force cleaner turns.", speed: 186, target: 4, layout: "lanes", walls: 5, hazards: 0, enemies: 0, portals: 0, powerups: 1, timer: null, reverse: false, shrink: 0 },
-    { name: "Prism Path", desc: "Cross-pattern walls create more dead ends.", speed: 180, target: 4, layout: "cross", walls: 4, hazards: 0, enemies: 0, portals: 0, powerups: 1, timer: null, reverse: false, shrink: 0 },
-    { name: "Circuit Chase", desc: "Ring walls begin to squeeze the board.", speed: 174, target: 5, layout: "rings", walls: 5, hazards: 0, enemies: 0, portals: 0, powerups: 1, timer: null, reverse: false, shrink: 0 },
-    { name: "Glitch Garden", desc: "The first drones enter. Watch the lanes.", speed: 170, target: 5, layout: "maze", walls: 8, hazards: 1, enemies: 0, portals: 0, powerups: 1, timer: null, reverse: false, shrink: 0 },
-    { name: "Pulse Corridor", desc: "The maze tightens and the pace picks up.", speed: 166, target: 5, layout: "lanes", walls: 10, hazards: 1, enemies: 0, portals: 0, powerups: 1, timer: null, reverse: false, shrink: 0 },
-    { name: "Voxel Vault", desc: "Fortress walls and a few safer openings.", speed: 162, target: 5, layout: "fortress", walls: 12, hazards: 1, enemies: 0, portals: 1, powerups: 1, timer: null, reverse: false, shrink: 0 },
-    { name: "Laser Loop", desc: "Portals join the mix and make route planning matter.", speed: 158, target: 6, layout: "rings", walls: 12, hazards: 1, enemies: 0, portals: 1, powerups: 1, timer: null, reverse: false, shrink: 0 },
-    { name: "Swap Storm", desc: "Controls flip. Your brain has to stay calm.", speed: 154, target: 6, layout: "chaos", walls: 10, hazards: 1, enemies: 0, portals: 1, powerups: 1, timer: 80, reverse: true, shrink: 0 },
-    { name: "Cyber Garden", desc: "A rival snake appears and starts hunting you.", speed: 150, target: 6, layout: "maze", walls: 12, hazards: 1, enemies: 1, portals: 0, powerups: 1, timer: 75, reverse: false, shrink: 0 },
-    { name: "Bluewire Bend", desc: "Hazards, enemy pressure, and a tighter lane count.", speed: 146, target: 6, layout: "cross", walls: 12, hazards: 2, enemies: 1, portals: 0, powerups: 1, timer: 75, reverse: false, shrink: 0 },
-    { name: "Quantum Walk", desc: "Portals and hunters make each route a puzzle.", speed: 142, target: 6, layout: "labyrinth", walls: 14, hazards: 2, enemies: 1, portals: 1, powerups: 1, timer: 72, reverse: false, shrink: 0 },
-    { name: "Neon Relay", desc: "Two drones now patrol the arena.", speed: 138, target: 6, layout: "fortress", walls: 14, hazards: 2, enemies: 1, portals: 1, powerups: 1, timer: 72, reverse: false, shrink: 0 },
-    { name: "Signal Rift", desc: "Mirror routes and a more aggressive rival snake.", speed: 136, target: 7, layout: "mirror", walls: 14, hazards: 2, enemies: 1, portals: 1, powerups: 1, timer: 70, reverse: false, shrink: 0 },
-    { name: "Byte Barrage", desc: "The board starts to feel crowded on purpose.", speed: 132, target: 7, layout: "maze", walls: 16, hazards: 2, enemies: 2, portals: 1, powerups: 1, timer: 68, reverse: false, shrink: 0 },
-    { name: "Chrome Canal", desc: "Longer runs with a stricter countdown.", speed: 128, target: 7, layout: "lanes", walls: 16, hazards: 3, enemies: 2, portals: 1, powerups: 1, timer: 66, reverse: false, shrink: 0 },
-    { name: "Prism Panic", desc: "The lane pattern is now almost a trap.", speed: 124, target: 7, layout: "rings", walls: 18, hazards: 3, enemies: 2, portals: 1, powerups: 1, timer: 64, reverse: false, shrink: 0 },
-    { name: "Static Siege", desc: "Enemies and hazards overlap with less mercy.", speed: 120, target: 7, layout: "chaos", walls: 18, hazards: 3, enemies: 2, portals: 2, powerups: 1, timer: 62, reverse: false, shrink: 0 },
-    { name: "Inversion", desc: "Reverse controls return alongside more pressure.", speed: 116, target: 7, layout: "labyrinth", walls: 18, hazards: 3, enemies: 2, portals: 2, powerups: 1, timer: 60, reverse: true, shrink: 0 },
-    { name: "Data Dunes", desc: "The outer edge starts closing in over time.", speed: 112, target: 8, layout: "fortress", walls: 20, hazards: 3, enemies: 2, portals: 2, powerups: 1, timer: 58, reverse: false, shrink: 16 },
-    { name: "Turbo Tangle", desc: "The arena shrinks and the hunters speed up.", speed: 108, target: 8, layout: "maze", walls: 20, hazards: 4, enemies: 2, portals: 2, powerups: 1, timer: 56, reverse: false, shrink: 14 },
-    { name: "Omega Orbit", desc: "Ring barriers, a double portal set, and tight timing.", speed: 104, target: 8, layout: "rings", walls: 22, hazards: 4, enemies: 2, portals: 2, powerups: 1, timer: 54, reverse: false, shrink: 14 },
-    { name: "Hyper Hive", desc: "More rival movement and fewer safe guesses.", speed: 100, target: 8, layout: "cross", walls: 22, hazards: 4, enemies: 3, portals: 2, powerups: 1, timer: 52, reverse: false, shrink: 12 },
-    { name: "Synth Spiral", desc: "A spiral-like route pattern with lots of bad choices.", speed: 96, target: 8, layout: "spiral", walls: 24, hazards: 4, enemies: 3, portals: 2, powerups: 1, timer: 50, reverse: false, shrink: 12 },
-    { name: "Neon Nexus", desc: "Three hunters, multiple drones, and a smaller safe zone.", speed: 92, target: 9, layout: "fortress", walls: 24, hazards: 4, enemies: 3, portals: 2, powerups: 1, timer: 48, reverse: false, shrink: 10 },
-    { name: "Corrupt Core", desc: "The edges are unsafe and the board is no longer generous.", speed: 88, target: 9, layout: "chaos", walls: 24, hazards: 5, enemies: 3, portals: 2, powerups: 1, timer: 46, reverse: false, shrink: 10 },
-    { name: "Overclock", desc: "Very fast movement with narrow lanes and hard turns.", speed: 84, target: 9, layout: "maze", walls: 26, hazards: 5, enemies: 3, portals: 2, powerups: 1, timer: 44, reverse: false, shrink: 8 },
-    { name: "Final Grid", desc: "Almost everything is dangerous now.", speed: 80, target: 9, layout: "rings", walls: 26, hazards: 5, enemies: 3, portals: 2, powerups: 1, timer: 42, reverse: false, shrink: 8 },
-    { name: "Singularity Prime", desc: "The final stage. Tight, hostile, and very little room for mistakes.", speed: 76, target: 10, layout: "boss", walls: 28, hazards: 6, enemies: 4, portals: 2, powerups: 1, timer: 40, reverse: true, shrink: 6 }
+    // --- Easy (4 moves/sec) ---
+    { name: "Spark Start", desc: "Warm-up with a soft pace and a few anchored blocks.", target: 3, layout: "open", walls: 4, hazards: 0, enemies: 0, portals: 0, powerups: 1, timer: null, mirror: false, shrink: 0 },
+    { name: "Neon Drift", desc: "A bright open lane with light obstacles and no boxed-in sections.", target: 4, layout: "boulevard", walls: 8, hazards: 0, enemies: 0, portals: 0, powerups: 1, timer: null, mirror: false, shrink: 0 },
+    { name: "Byte Bloom", desc: "Lane walls appear and force cleaner turns.", target: 4, layout: "lanes", walls: 5, hazards: 0, enemies: 0, portals: 0, powerups: 1, timer: null, mirror: false, shrink: 0 },
+    { name: "Prism Path", desc: "Cross-pattern walls create more dead ends.", target: 4, layout: "cross", walls: 4, hazards: 0, enemies: 0, portals: 0, powerups: 1, timer: null, mirror: false, shrink: 0 },
+    { name: "Circuit Chase", desc: "Ring walls begin to squeeze the board.", target: 5, layout: "rings", walls: 5, hazards: 0, enemies: 0, portals: 0, powerups: 1, timer: null, mirror: false, shrink: 0 },
+    { name: "Glitch Garden", desc: "The first drone enters. Watch the lanes.", target: 5, layout: "maze", walls: 8, hazards: 1, enemies: 0, portals: 0, powerups: 1, timer: null, mirror: false, shrink: 0 },
+    { name: "Pulse Corridor", desc: "The maze tightens while the drone keeps patrolling.", target: 5, layout: "lanes", walls: 10, hazards: 1, enemies: 0, portals: 0, powerups: 1, timer: null, mirror: false, shrink: 0 },
+    { name: "Voxel Vault", desc: "Fortress walls, a drone, and your first portal pair.", target: 5, layout: "fortress", walls: 12, hazards: 1, enemies: 0, portals: 1, powerups: 1, timer: null, mirror: false, shrink: 0 },
+
+    // --- Hard (5 moves/sec) ---
+    { name: "Laser Loop", desc: "Portals join the mix and make route planning matter.", target: 6, layout: "rings", walls: 12, hazards: 1, enemies: 0, portals: 1, powerups: 1, timer: null, mirror: false, shrink: 0 },
+    { name: "Swap Storm", desc: "Left and right are mirrored. Up and down still behave.", target: 6, layout: "chaos", walls: 10, hazards: 1, enemies: 0, portals: 1, powerups: 1, timer: 80, mirror: true, shrink: 0 },
+    { name: "Cyber Garden", desc: "A tighter maze and a countdown that keeps you moving.", target: 6, layout: "maze", walls: 12, hazards: 1, enemies: 0, portals: 0, powerups: 1, timer: 75, mirror: false, shrink: 0 },
+    { name: "Bluewire Bend", desc: "Two drones and a narrower set of lanes.", target: 6, layout: "cross", walls: 12, hazards: 2, enemies: 0, portals: 0, powerups: 1, timer: 75, mirror: false, shrink: 0 },
+    { name: "Quantum Walk", desc: "Portals and drones turn every route into a puzzle.", target: 6, layout: "labyrinth", walls: 14, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 72, mirror: false, shrink: 0 },
+    { name: "Neon Relay", desc: "Two drones patrol a fortress with narrow gates.", target: 6, layout: "fortress", walls: 14, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 72, mirror: false, shrink: 0 },
+    { name: "Signal Rift", desc: "Mirrored routes and a stricter clock.", target: 7, layout: "mirror", walls: 14, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 70, mirror: false, shrink: 0 },
+    { name: "Byte Barrage", desc: "The board starts to feel crowded on purpose.", target: 7, layout: "maze", walls: 16, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 68, mirror: false, shrink: 0 },
+
+    // --- Super Hard (6 moves/sec) ---
+    { name: "Chrome Canal", desc: "Longer runs with a stricter countdown.", target: 7, layout: "lanes", walls: 16, hazards: 3, enemies: 0, portals: 1, powerups: 1, timer: 66, mirror: false, shrink: 0 },
+    { name: "Prism Panic", desc: "The lane pattern is now almost a trap.", target: 7, layout: "rings", walls: 18, hazards: 3, enemies: 0, portals: 1, powerups: 1, timer: 64, mirror: false, shrink: 0 },
+    { name: "Static Siege", desc: "Drone packs and dead ends overlap with less mercy.", target: 7, layout: "chaos", walls: 18, hazards: 3, enemies: 0, portals: 2, powerups: 1, timer: 62, mirror: false, shrink: 0 },
+    { name: "Inversion", desc: "Mirrored steering returns alongside more pressure.", target: 7, layout: "labyrinth", walls: 18, hazards: 3, enemies: 0, portals: 2, powerups: 1, timer: 60, mirror: true, shrink: 0 },
+    { name: "Data Dunes", desc: "The outer edge starts closing in over time.", target: 8, layout: "fortress", walls: 20, hazards: 3, enemies: 0, portals: 2, powerups: 1, timer: 58, mirror: false, shrink: 16 },
+    { name: "Turbo Tangle", desc: "The arena shrinks while the drones keep hunting.", target: 8, layout: "maze", walls: 20, hazards: 4, enemies: 0, portals: 2, powerups: 1, timer: 56, mirror: false, shrink: 14 },
+    { name: "Omega Orbit", desc: "Ring barriers, a double portal set, and tight timing.", target: 8, layout: "rings", walls: 22, hazards: 4, enemies: 0, portals: 2, powerups: 1, timer: 54, mirror: false, shrink: 14 },
+    { name: "Hyper Hive", desc: "A dense cross maze with almost no safe guesses.", target: 8, layout: "cross", walls: 22, hazards: 4, enemies: 0, portals: 2, powerups: 1, timer: 52, mirror: false, shrink: 12 },
+
+    // --- Hard Pro Max (7 moves/sec, rival snakes appear) ---
+    { name: "Synth Spiral", desc: "Rival snakes arrive. They move slower than you — use that.", target: 8, layout: "spiral", walls: 24, hazards: 4, enemies: 3, portals: 2, powerups: 1, timer: 50, mirror: false, shrink: 12 },
+    { name: "Neon Nexus", desc: "Three rivals, multiple drones, and a smaller safe zone.", target: 9, layout: "fortress", walls: 24, hazards: 4, enemies: 3, portals: 2, powerups: 1, timer: 48, mirror: false, shrink: 10 },
+    { name: "Corrupt Core", desc: "The edges are unsafe and the board is no longer generous.", target: 9, layout: "chaos", walls: 24, hazards: 5, enemies: 3, portals: 2, powerups: 1, timer: 46, mirror: false, shrink: 10 },
+    { name: "Overclock", desc: "Narrow lanes, hard turns, and rivals cutting you off.", target: 9, layout: "maze", walls: 26, hazards: 5, enemies: 3, portals: 2, powerups: 1, timer: 44, mirror: false, shrink: 8 },
+    { name: "Final Grid", desc: "Almost everything on this board is dangerous.", target: 9, layout: "rings", walls: 26, hazards: 5, enemies: 3, portals: 2, powerups: 1, timer: 42, mirror: false, shrink: 8 },
+    { name: "Singularity Prime", desc: "The final stage. Mirrored steering, four rivals, very little room.", target: 10, layout: "boss", walls: 28, hazards: 6, enemies: 4, portals: 2, powerups: 1, timer: 40, mirror: true, shrink: 6 }
   ];
 
   /* Difficulty tiers. The boundaries follow where the game actually changes
@@ -298,33 +309,48 @@
       name: "Easy",
       from: 0,
       to: 7,
-      blurb: "Learn the board. Gentle speeds, simple layouts, and the first drones and portals near the end."
+      movesPerSec: 4,
+      blurb: "A steady 4 moves per second the whole way. Learn the board: simple layouts, then the first drone and portal pair."
     },
     {
       id: "hard",
       name: "Hard",
       from: 8,
       to: 15,
-      blurb: "Portals, inverted controls, stage timers and the first rival snakes hunting you down."
+      movesPerSec: 5,
+      blurb: "A steady 5 moves per second. Portals, stage timers, drone pairs, and one stage with mirrored steering."
     },
     {
       id: "super",
       name: "Super Hard",
       from: 16,
       to: 23,
-      blurb: "Multiple rivals and drone packs, tighter countdowns, and from level 21 the arena starts closing in."
+      movesPerSec: 6,
+      blurb: "A steady 6 moves per second. Drone packs, tight countdowns, and from level 21 the arena starts closing in."
     },
     {
       id: "promax",
       name: "Hard Pro Max",
       from: 24,
       to: 29,
-      blurb: "Spiral and fortress mazes, up to four rivals, a shrinking board and almost no margin for error."
+      movesPerSec: 7,
+      blurb: "A steady 7 moves per second, and the only tier with rival snakes — they move 2 steps per second slower than you."
     }
   ];
 
+  // Rivals always move this many steps per second slower than the player.
+  const RIVAL_SPEED_DELTA = 2;
+
   function tierForLevel(levelIndex) {
     return TIERS.find((tier) => levelIndex >= tier.from && levelIndex <= tier.to) || TIERS[0];
+  }
+
+  function playerMovesPerSec(levelIndex) {
+    return tierForLevel(levelIndex).movesPerSec;
+  }
+
+  function rivalMovesPerSec(levelIndex) {
+    return Math.max(1, playerMovesPerSec(levelIndex) - RIVAL_SPEED_DELTA);
   }
 
   const state = {
@@ -341,7 +367,7 @@
     bestLevel: 1,
     seed: "campaign",
     rng: mulberry32(1),
-    stepMs: LEVELS[0].speed,
+    stepMs: 1000 / TIERS[0].movesPerSec,
     accumulator: 0,
     tick: 0,
     levelTick: 0,
@@ -349,7 +375,8 @@
     missionGoal: LEVELS[0].target,
     missionClearBonus: 0,
     timerLeft: null,
-    reverse: false,
+    mirror: false,
+    enemyStepAccumulator: 0,
     shrinkMargin: 0,
     currentLevel: null,
     snake: [],
@@ -597,11 +624,13 @@
   // Compact one-line summary of what makes a level distinct.
   function describeLevel(levelIndex) {
     const level = LEVELS[levelIndex];
-    const parts = [`${Math.round(1000 / level.speed)}/s`];
+    const parts = [`${playerMovesPerSec(levelIndex)}/s`];
     if (level.hazards) parts.push(`${level.hazards} drone${level.hazards > 1 ? "s" : ""}`);
-    if (level.enemies) parts.push(`${level.enemies} rival${level.enemies > 1 ? "s" : ""}`);
+    if (level.enemies) {
+      parts.push(`${level.enemies} rival${level.enemies > 1 ? "s" : ""} @ ${rivalMovesPerSec(levelIndex)}/s`);
+    }
     if (level.portals) parts.push("portals");
-    if (level.reverse) parts.push("inverted");
+    if (level.mirror) parts.push("mirrored L/R");
     if (level.timer) parts.push(`${level.timer}s`);
     if (level.shrink) parts.push("shrinking");
     return parts.join(" · ");
@@ -902,8 +931,9 @@
     state.missionGoal = state.currentLevel.target;
     state.missionClearBonus = 100 + levelIndex * 18;
     state.timerLeft = state.currentLevel.timer ?? null;
-    state.reverse = state.currentLevel.reverse;
+    state.mirror = state.currentLevel.mirror;
     state.shrinkMargin = 0;
+    state.enemyStepAccumulator = 0;
     state.snake = buildSnakeStart();
     state.snakeDir = { x: 1, y: 0 };
     state.nextDir = { x: 1, y: 0 };
@@ -915,6 +945,7 @@
     spawnEnemies(state.currentLevel.enemies);
     spawnPowerups(state.currentLevel.powerups);
     ensurePlayableBoard();
+    announceLevelModifiers();
     captureCheckpoint(levelIndex);
     updateLevelPanel();
     updateUI();
@@ -924,11 +955,16 @@
     const base = LEVELS[levelIndex];
     const seedMix = hashSeed(`${state.seed}:${levelIndex + 1}`);
     const rng = mulberry32(seedMix);
+    const tier = tierForLevel(levelIndex);
     return {
       index: levelIndex + 1,
       name: base.name,
       desc: base.desc,
-      speed: base.speed,
+      tier,
+      movesPerSec: tier.movesPerSec,
+      // Speed is uniform across a tier, so it is derived rather than stored.
+      speed: 1000 / tier.movesPerSec,
+      rivalMovesPerSec: rivalMovesPerSec(levelIndex),
       target: base.target,
       layout: base.layout,
       walls: base.walls,
@@ -937,7 +973,7 @@
       portals: base.portals,
       powerups: base.powerups,
       timer: base.timer,
-      reverse: base.reverse,
+      mirror: base.mirror,
       shrink: base.shrink,
       rng
     };
@@ -1122,6 +1158,20 @@
    * play and carve corridors until it does. Carving draws from the level's
    * own seeded RNG, so a Daily Rift board stays identical for every player.
    * --------------------------------------------------------------- */
+  /* A mirrored stage should never be a surprise, so it is called out on the
+     board itself as well as in the mission panel. */
+  function announceLevelModifiers() {
+    if (!state.currentLevel?.mirror) return;
+    const head = state.snake[0] || { x: Math.floor(GRID.cols / 2), y: Math.floor(GRID.rows / 2) };
+    state.floating.push({
+      text: "◀ Left / right mirrored ▶",
+      x: head.x,
+      y: Math.max(2, head.y - 3),
+      color: COLORS.slow,
+      life: 90
+    });
+  }
+
   function ensurePlayableBoard() {
     clearSpawnArea();
 
@@ -1441,8 +1491,11 @@
     };
     let dir = mapping[dirName];
     if (!dir) return;
-    if (state.reverse) {
-      dir = { x: -dir.x, y: -dir.y };
+    /* Mirrored stages swap left and right but leave up and down alone.
+       Flipping both axes (the old behaviour) meant every single input had to
+       be mentally reversed, which read as unfair rather than interesting. */
+    if (state.mirror) {
+      dir = { x: -dir.x, y: dir.y };
     }
     const current = state.snakeDir;
     const isReverse = current.x + dir.x === 0 && current.y + dir.y === 0;
@@ -1564,9 +1617,20 @@
       if (state.paused || state.over || state.won) {
         return;
       }
-      moveEnemies();
-      if (state.paused || state.over || state.won) {
-        return;
+    }
+
+    /* Rivals run on their own clock rather than one move per player step, so
+       they can be held a fixed number of steps per second behind the player.
+       The accumulator carries the fractional remainder between ticks. */
+    if (state.enemySnakes.length) {
+      const ratio = (state.currentLevel.rivalMovesPerSec || 1) / (state.currentLevel.movesPerSec || 1);
+      state.enemyStepAccumulator += slowed ? ratio * 0.5 : ratio;
+      while (state.enemyStepAccumulator >= 1) {
+        state.enemyStepAccumulator -= 1;
+        moveEnemies();
+        if (state.paused || state.over || state.won) {
+          return;
+        }
       }
     }
 
@@ -2495,7 +2559,7 @@
     const timerValue = state.timerLeft == null ? "No time limit on this stage." : `${Math.ceil(state.timerLeft)}s remaining.`;
     timerText.textContent = timerValue;
     const missionBits = [`Collect ${state.missionGoal} cores to unlock the next level.`];
-    if (state.currentLevel?.reverse) missionBits.push("Controls are inverted on this stage.");
+    if (state.currentLevel?.mirror) missionBits.push("Left and right are mirrored on this stage — up and down are normal.");
     if (isPracticeRun()) missionBits.push(`Practice run from level ${state.runStartLevel + 1} — not posted.`);
     missionText.textContent = missionBits.join(" ");
     const progress = Math.max(0, Math.min(1, state.missionGoal ? state.mission / state.missionGoal : 0));
@@ -2509,12 +2573,14 @@
     modifierList.innerHTML = "";
     const modifiers = [
       `Tier: ${tierForLevel(state.levelIndex).name}`,
-      `Speed: ${Math.round(1000 / level.speed)} moves/sec`,
+      `Speed: ${playerMovesPerSec(state.levelIndex)} moves/sec`,
       `Layout: ${prettyLayout(level.layout)}`,
       `Drones: ${level.hazards}`,
-      `Rival snakes: ${level.enemies}`,
+      level.enemies
+        ? `Rival snakes: ${level.enemies} at ${rivalMovesPerSec(state.levelIndex)} moves/sec`
+        : "Rival snakes: none",
       `Portals: ${level.portals}`,
-      level.reverse ? "Inverted controls" : "Normal controls",
+      level.mirror ? "Mirrored left/right" : "Normal controls",
       level.timer ? `Timer: ${level.timer}s` : "No stage timer",
       level.shrink ? `Arena shrinks every ${level.shrink} ticks` : "Stable arena"
     ];

@@ -118,11 +118,12 @@
     }
     if (!chosen) return null;
 
-    // requestDirection applies the inversion itself, so pre-invert to cancel it
-    // out and keep the autopilot steering true on reverse-control levels.
-    if (state.reverse) {
-      const opposite = { up: "down", down: "up", left: "right", right: "left" };
-      return opposite[chosen.name];
+    // requestDirection applies the mirroring itself, so pre-mirror to cancel it
+    // out and keep the autopilot steering true on mirrored stages. Only the
+    // horizontal axis is flipped.
+    if (state.mirror) {
+      const mirrored = { left: "right", right: "left" };
+      return mirrored[chosen.name] || chosen.name;
     }
     return chosen.name;
   }
