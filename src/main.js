@@ -1302,14 +1302,24 @@ function onVictory({ score, levelReached }) {
     if (!state.shrinkMargin) return;
     ctx.save();
     ctx.fillStyle = "rgba(255, 93, 118, 0.06)";
-    const margin = state.shrinkMargin * cell;
-    ctx.fillRect(ox, oy, GRID.cols * cell, margin);
-    ctx.fillRect(ox, oy + GRID.rows * cell - margin, GRID.cols * cell, margin);
-    ctx.fillRect(ox, oy, margin, GRID.rows * cell);
-    ctx.fillRect(ox + GRID.cols * cell - margin, oy, margin, GRID.rows * cell);
+
+    /* inShrinkZone blocks cells 0..margin inclusive, so the lethal band is
+       margin + 1 cells deep. Shading only `margin` drew the cage one cell too
+       large on every side: the ring just inside the line looked safe but
+       killed you, and a core on the first legal cell appeared to sit outside
+       the cage. The mask must mirror the collision rule exactly. */
+    const band = (state.shrinkMargin + 1) * cell;
+    const boardW = GRID.cols * cell;
+    const boardH = GRID.rows * cell;
+
+    ctx.fillRect(ox, oy, boardW, band);
+    ctx.fillRect(ox, oy + boardH - band, boardW, band);
+    ctx.fillRect(ox, oy, band, boardH);
+    ctx.fillRect(ox + boardW - band, oy, band, boardH);
+
     ctx.strokeStyle = "rgba(255, 93, 118, 0.35)";
     ctx.lineWidth = 2;
-    ctx.strokeRect(ox + margin, oy + margin, GRID.cols * cell - margin * 2, GRID.rows * cell - margin * 2);
+    ctx.strokeRect(ox + band, oy + band, boardW - band * 2, boardH - band * 2);
     ctx.restore();
   }
 

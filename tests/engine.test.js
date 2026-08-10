@@ -108,7 +108,7 @@ test("rival snakes exist only in the final tier, one per level, 2/sec slower", (
   });
 });
 
-test("generated boards match the pre-refactor baseline exactly", () => {
+test("generated boards match the recorded baseline exactly", () => {
   for (const [seed, fingerprints] of Object.entries(baseline)) {
     if (seed.startsWith("_")) continue;
     for (let i = 0; i < LEVELS.length; i++) {

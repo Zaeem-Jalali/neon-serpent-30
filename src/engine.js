@@ -17,6 +17,7 @@ import {
   CHECKPOINT_EVERY,
   MAX_LIVES,
   MIN_OPEN_CELLS,
+  MAX_SHRINK_MARGIN,
   tierForLevel,
   playerMovesPerSec,
   rivalMovesPerSec
@@ -330,7 +331,9 @@ export function createEngine({ emit = () => {} } = {}) {
   function ensurePlayableBoard() {
     clearSpawnArea();
 
-    for (let attempt = 0; attempt < 200; attempt++) {
+    // Budget scales with the target: reaching 200 open cells from a dense
+    // board can need well over a hundred individual carves.
+    for (let attempt = 0; attempt < MIN_OPEN_CELLS * 3; attempt++) {
       const region = openRegionFromHead();
       if (region.size >= MIN_OPEN_CELLS) break;
       if (!carveFrontier(region)) break;
@@ -690,7 +693,7 @@ export function createEngine({ emit = () => {} } = {}) {
 
     if (level.shrink && state.levelTick % level.shrink === 0) {
       const previous = state.shrinkMargin;
-      state.shrinkMargin = Math.min(Math.floor(Math.min(GRID.cols, GRID.rows) / 2) - 4, state.shrinkMargin + 1);
+      state.shrinkMargin = Math.min(MAX_SHRINK_MARGIN, state.shrinkMargin + 1);
       if (state.shrinkMargin !== previous) {
         onArenaShrunk();
       }

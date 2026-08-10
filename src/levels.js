@@ -5,9 +5,23 @@
 export const GRID = { cols: 30, rows: 20 };
 export const CHECKPOINT_EVERY = 5;
 export const MAX_LIVES = 5;
-// Minimum number of cells the player must be able to reach from the spawn
-// point before a generated board is accepted as playable.
-export const MIN_OPEN_CELLS = 60;
+/* Minimum number of cells the player must be able to reach from the spawn
+ * point before a generated board is accepted as playable.
+ *
+ * This was 60, which only prevented "unwinnable" — it happily allowed closets.
+ * Measured boards were coming out at 86 reachable cells out of 600 (level 27)
+ * and 92 (level 30), which is not a level so much as a corridor. 200 leaves
+ * room to actually manoeuvre. */
+export const MIN_OPEN_CELLS = 200;
+
+/* How far the closing arena may ever advance from each edge.
+ *
+ * This was effectively 6, which collapsed the board to 16x6 = 96 cells with
+ * the walls still inside it. Level 30 reached that floor 5 seconds into a
+ * 40-second stage and then asked for 10 cores. A cap of 3 leaves 22x12 = 264
+ * cells, which is tight without being arithmetically impossible. */
+export const MAX_SHRINK_MARGIN = 3;
+
 // Rivals always move this many steps per second slower than the player.
 export const RIVAL_SPEED_DELTA = 2;
 
@@ -32,23 +46,28 @@ export const LEVELS = [
   { name: "Signal Rift", desc: "Mirrored routes and a stricter clock.", target: 7, layout: "mirror", walls: 14, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 70, mirror: false, shrink: 0 },
   { name: "Byte Barrage", desc: "The board starts to feel crowded on purpose.", target: 7, layout: "maze", walls: 16, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 68, mirror: false, shrink: 0 },
 
-  // --- Super Hard (6 moves/sec) ---
-  { name: "Chrome Canal", desc: "Longer runs with a stricter countdown.", target: 7, layout: "lanes", walls: 16, hazards: 3, enemies: 0, portals: 1, powerups: 1, timer: 66, mirror: false, shrink: 0 },
-  { name: "Prism Panic", desc: "The lane pattern is now almost a trap.", target: 7, layout: "rings", walls: 18, hazards: 3, enemies: 0, portals: 1, powerups: 1, timer: 64, mirror: false, shrink: 0 },
-  { name: "Static Siege", desc: "Drone packs and dead ends overlap with less mercy.", target: 7, layout: "chaos", walls: 18, hazards: 3, enemies: 0, portals: 2, powerups: 1, timer: 62, mirror: false, shrink: 0 },
-  { name: "Inversion", desc: "Mirrored steering returns alongside more pressure.", target: 7, layout: "labyrinth", walls: 18, hazards: 3, enemies: 0, portals: 2, powerups: 1, timer: 60, mirror: true, shrink: 0 },
-  { name: "Data Dunes", desc: "The outer edge starts closing in over time.", target: 8, layout: "fortress", walls: 20, hazards: 3, enemies: 0, portals: 2, powerups: 1, timer: 58, mirror: false, shrink: 16 },
-  { name: "Turbo Tangle", desc: "The arena shrinks while the drones keep hunting.", target: 8, layout: "maze", walls: 20, hazards: 4, enemies: 0, portals: 2, powerups: 1, timer: 56, mirror: false, shrink: 14 },
-  { name: "Omega Orbit", desc: "Ring barriers, a double portal set, and tight timing.", target: 8, layout: "rings", walls: 22, hazards: 4, enemies: 0, portals: 2, powerups: 1, timer: 54, mirror: false, shrink: 14 },
-  { name: "Hyper Hive", desc: "A dense cross maze with almost no safe guesses.", target: 8, layout: "cross", walls: 22, hazards: 4, enemies: 0, portals: 2, powerups: 1, timer: 52, mirror: false, shrink: 12 },
+  /* --- Super Hard (6 moves/sec) ---
+     Rebalanced: wall counts roughly halved, drone counts cut, timers loosened
+     and the shrink slowed. The old numbers left several boards under 120
+     reachable cells before the arena even started closing. */
+  { name: "Chrome Canal", desc: "Longer runs with a stricter countdown.", target: 6, layout: "lanes", walls: 12, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 70, mirror: false, shrink: 0 },
+  { name: "Prism Panic", desc: "Ring lanes that reward planning your exit early.", target: 6, layout: "rings", walls: 12, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 70, mirror: false, shrink: 0 },
+  { name: "Static Siege", desc: "Scattered cover and drones on patrol.", target: 6, layout: "chaos", walls: 9, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 68, mirror: false, shrink: 0 },
+  { name: "Inversion", desc: "Mirrored steering returns, on a cleaner board.", target: 6, layout: "labyrinth", walls: 12, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 68, mirror: true, shrink: 0 },
+  { name: "Data Dunes", desc: "The outer edge starts closing in over time.", target: 7, layout: "fortress", walls: 12, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 68, mirror: false, shrink: 88 },
+  { name: "Turbo Tangle", desc: "The arena shrinks while the drones keep patrolling.", target: 7, layout: "maze", walls: 12, hazards: 3, enemies: 0, portals: 1, powerups: 1, timer: 66, mirror: false, shrink: 86 },
+  { name: "Omega Orbit", desc: "Ring barriers, a double portal set, and steady timing.", target: 7, layout: "rings", walls: 14, hazards: 3, enemies: 0, portals: 2, powerups: 1, timer: 66, mirror: false, shrink: 86 },
+  { name: "Hyper Hive", desc: "A cross maze that closes in from every side.", target: 7, layout: "cross", walls: 14, hazards: 3, enemies: 0, portals: 2, powerups: 1, timer: 64, mirror: false, shrink: 84 },
 
-  // --- Hard Pro Max (7 moves/sec, rival snakes appear) ---
-  { name: "Synth Spiral", desc: "A rival snake arrives. It moves slower than you — use that.", target: 8, layout: "spiral", walls: 24, hazards: 4, enemies: 1, portals: 2, powerups: 1, timer: 50, mirror: false, shrink: 12 },
-  { name: "Neon Nexus", desc: "One rival, multiple drones, and a smaller safe zone.", target: 9, layout: "fortress", walls: 24, hazards: 4, enemies: 1, portals: 2, powerups: 1, timer: 48, mirror: false, shrink: 10 },
-  { name: "Corrupt Core", desc: "The edges are unsafe and the board is no longer generous.", target: 9, layout: "chaos", walls: 24, hazards: 5, enemies: 1, portals: 2, powerups: 1, timer: 46, mirror: false, shrink: 10 },
-  { name: "Overclock", desc: "Narrow lanes, hard turns, and a rival cutting you off.", target: 9, layout: "maze", walls: 26, hazards: 5, enemies: 1, portals: 2, powerups: 1, timer: 44, mirror: false, shrink: 8 },
-  { name: "Final Grid", desc: "Almost everything on this board is dangerous.", target: 9, layout: "rings", walls: 26, hazards: 5, enemies: 1, portals: 2, powerups: 1, timer: 42, mirror: false, shrink: 8 },
-  { name: "Singularity Prime", desc: "The final stage. Mirrored steering, one rival, very little room.", target: 10, layout: "boss", walls: 28, hazards: 6, enemies: 1, portals: 2, powerups: 1, timer: 40, mirror: true, shrink: 6 }
+  /* --- Hard Pro Max (7 moves/sec, one rival snake) ---
+     The pressure here should come from speed and the single hunter, not from
+     burying the board in walls and drones. */
+  { name: "Synth Spiral", desc: "A rival snake arrives. It moves slower than you — use that.", target: 7, layout: "spiral", walls: 14, hazards: 3, enemies: 1, portals: 2, powerups: 1, timer: 62, mirror: false, shrink: 94 },
+  { name: "Neon Nexus", desc: "One rival, patrolling drones, and a shrinking safe zone.", target: 7, layout: "fortress", walls: 14, hazards: 3, enemies: 1, portals: 2, powerups: 1, timer: 62, mirror: false, shrink: 92 },
+  { name: "Corrupt Core", desc: "Open ground, but the edges are closing and nothing is idle.", target: 8, layout: "chaos", walls: 9, hazards: 4, enemies: 1, portals: 2, powerups: 1, timer: 62, mirror: false, shrink: 92 },
+  { name: "Overclock", desc: "Narrow lanes, hard turns, and a rival cutting you off.", target: 8, layout: "maze", walls: 16, hazards: 4, enemies: 1, portals: 2, powerups: 1, timer: 60, mirror: false, shrink: 90 },
+  { name: "Final Grid", desc: "Every system at once, on ground you can still read.", target: 8, layout: "rings", walls: 16, hazards: 4, enemies: 1, portals: 2, powerups: 1, timer: 60, mirror: false, shrink: 90 },
+  { name: "Singularity Prime", desc: "The final stage. Mirrored steering, one rival, no slack.", target: 9, layout: "boss", walls: 16, hazards: 4, enemies: 1, portals: 2, powerups: 1, timer: 60, mirror: true, shrink: 88 }
 ];
 
 /* Difficulty tiers. The boundaries follow where the game actually changes

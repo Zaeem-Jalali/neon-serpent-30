@@ -91,6 +91,16 @@ rather than from a tempo that creeps up level by level.
 your 7/sec. They run on their own accumulator rather than one move per player
 step, so the gap holds exactly regardless of tier speed.
 
+**Balance is measured, not guessed.** `node tools/difficulty-report.mjs` drives
+the real engine and prints, per level, the reachable cells on the generated
+board, the move budget per core, and how long the arena takes to finish closing.
+Two constants in `src/levels.js` set the safety floor:
+
+- `MIN_OPEN_CELLS` — no generated board may leave fewer reachable cells than
+  this; the generator carves corridors until it complies.
+- `MAX_SHRINK_MARGIN` — how far the closing arena may ever advance, which fixes
+  the size of the final playfield.
+
 **Mirrored stages** (levels 10, 20 and 30) swap left and right but leave up and
 down alone. Flipping both axes meant every input had to be mentally reversed,
 which read as unfair rather than interesting; mirroring one axis keeps the idea
@@ -137,6 +147,8 @@ the mission panel.
 | `netlify.toml` | Headers and cache rules for deployment |
 | `server.js` | Local dev server plus the `/api/scores` leaderboard |
 | `tools/make-icons.js` | Generates everything in `assets/` |
+| `tools/difficulty-report.mjs` | Measures what each level actually demands |
+| `tools/update-baseline.mjs` | Re-records board fingerprints, deliberately |
 | `tests/engine.test.js` | Node test suite (see below) |
 | `tests/audit.js` | Browser audit harness |
 
