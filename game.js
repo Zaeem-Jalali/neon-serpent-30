@@ -2888,7 +2888,19 @@
   }
 
   /* Test seam. tests/audit.js drives the game through this to verify every
-     level generates a solvable board and survives a simulated run. */
+     level generates a solvable board and survives a simulated run.
+     Gated behind ?debug=1 so it is not part of the public surface area of a
+     deployed build — it can jump levels, set lives and rewrite state. */
+  const debugEnabled = (() => {
+    try {
+      return new URLSearchParams(window.location.search).get("debug") === "1";
+    } catch {
+      return false;
+    }
+  })();
+
+  if (!debugEnabled) return;
+
   window.__neonDebug = {
     state,
     LEVELS,

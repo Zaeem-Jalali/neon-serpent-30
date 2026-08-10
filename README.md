@@ -1,9 +1,10 @@
 # Neon Serpent 30
 
 A modern, deliberately hard snake game: 30 handcrafted levels with drones, portals,
-rival snakes, shrinking arenas, inverted controls and stage timers.
+a rival snake, shrinking arenas, mirrored controls and stage timers.
 
-No build step, no dependencies — plain HTML, CSS and JavaScript.
+No build step, no dependencies, no framework — plain HTML, CSS and JavaScript,
+installable as a PWA and fully playable offline.
 
 ## Run
 
@@ -17,6 +18,46 @@ node server.js
 
 Then visit <http://127.0.0.1:4173>. Without the server the game is fully playable;
 the leaderboard panel just reports that it is offline.
+
+## Deploying
+
+The repository root *is* the site — there is nothing to build. Point any static
+host at it:
+
+- **Netlify** — connect the repo, or drag the folder onto the dashboard.
+  `netlify.toml` already sets the CSP, security headers and cache rules.
+- **Vercel / Cloudflare Pages / GitHub Pages** — work with zero configuration,
+  but do not read `netlify.toml`, so port the headers from it if you use one.
+
+`server.js` is for local development only; it is not needed in production, and
+the leaderboard panel degrades to an "offline" notice when no API is present.
+
+Two things to do once a real domain is live:
+
+1. In `index.html`, change `og:image` and `twitter:image` from relative paths to
+   absolute URLs, and add `<meta property="og:url">`. Most scrapers resolve
+   relative paths, but Facebook in particular wants absolute ones.
+2. Bump `CACHE_VERSION` in `sw.js` on any release that changes a precached file,
+   so returning players are not pinned to an old build.
+
+### Offline behaviour
+
+`sw.js` precaches the shell and art. Code (HTML/CSS/JS) is fetched
+**network-first** so a fix always reaches players on the next load, with the
+cache used only when the network is unavailable. Art under `assets/` is
+cache-first. `/api/*` is never cached, so the leaderboard is always live.
+
+### Regenerating the artwork
+
+Icons, favicons and the social card are generated from code rather than checked
+in as opaque binaries:
+
+```bash
+node tools/make-icons.js
+```
+
+It uses only Node's built-in `zlib` — no image dependencies — and rewrites
+everything in `assets/`. Re-run it after changing the palette.
 
 ## Controls
 
@@ -88,7 +129,11 @@ the mission panel.
 | `index.html` | Markup and panel structure |
 | `styles.css` | Styling, both palettes, responsive rules |
 | `game.js` | Game loop, level generation, rendering, audio, persistence |
-| `server.js` | Static file server plus the `/api/scores` leaderboard |
+| `sw.js` / `sw-register.js` | Service worker and its registration |
+| `manifest.json` | PWA metadata |
+| `netlify.toml` | Headers and cache rules for deployment |
+| `server.js` | Local dev server plus the `/api/scores` leaderboard |
+| `tools/make-icons.js` | Generates everything in `assets/` |
 | `tests/audit.js` | Level audit harness (see below) |
 
 Scores post to `data/scores.json`, which is created on demand and git-ignored.
@@ -100,7 +145,9 @@ checks every level of every seed: that nothing spawns inside a wall or out of
 bounds, that the core is always reachable from the snake's head, that the closing
 arena never strands it, and that a simulated run never throws.
 
-With the server running, open the game and in the browser console:
+The debug seam is **gated behind `?debug=1`** so it is not exposed on a deployed
+build — it can jump levels and rewrite game state. Open
+<http://127.0.0.1:4173/?debug=1>, then in the browser console:
 
 ```javascript
 const s = document.createElement('script');

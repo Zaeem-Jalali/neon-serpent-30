@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Neon Serpent">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b1a2e"/>
+      <stop offset="1" stop-color="#050a12"/>
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" fill="url(#bg)"/>
+  <g stroke="#57f8ff" stroke-opacity=".1" stroke-width="1">
+    <path d="M9 9h82M9 25.4h82M9 41.8h82M9 58.2h82M9 74.6h82M9 91h82"/>
+    <path d="M9 9v82M25.4 9v82M41.8 9v82M58.2 9v82M74.6 9v82M91 9v82"/>
+  </g>
+  <g>
+    <rect x="10.5" y="60" width="14" height="13" rx="4" fill="#63ff95"/>
+    <rect x="26.9" y="60" width="14" height="13" rx="4" fill="#63ff95"/>
+    <rect x="43.3" y="60" width="14" height="13" rx="4" fill="#57f8ff"/>
+    <rect x="43.3" y="43.5" width="14" height="13" rx="4" fill="#57f8ff"/>
+    <rect x="43.3" y="27" width="14" height="13" rx="4" fill="#8afcff"/>
+    <circle cx="47.6" cy="33" r="1.9" fill="#05121c"/>
+    <circle cx="53" cy="33" r="1.9" fill="#05121c"/>
+    <circle cx="82" cy="33.5" r="5.2" fill="#63ff95"/>
+  </g>
+</svg>

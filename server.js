@@ -223,6 +223,44 @@ async function handlePostScore(req, res) {
   }
 }
 
+/* Kept in sync with netlify.toml. The local server is the only place these can
+   be exercised before deploying, so they live here too rather than only in
+   host config. */
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "font-src 'self'",
+  "manifest-src 'self'",
+  "worker-src 'self'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+  "object-src 'none'"
+].join("; ");
+
+function securityHeaders(relativePath) {
+  const headers = {
+    "Content-Security-Policy": CSP,
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy": "geolocation=(), camera=(), microphone=(), payment=(), usb=()"
+  };
+
+  const normalised = relativePath.split(path.sep).join("/");
+  // A stale service worker can pin users to an old build indefinitely, so it
+  // and the shell must always revalidate. Icons are safe to cache hard.
+  if (normalised === "sw.js" || normalised === "index.html" || normalised === "manifest.json") {
+    headers["Cache-Control"] = "public, max-age=0, must-revalidate";
+  } else if (normalised.startsWith("assets/")) {
+    headers["Cache-Control"] = "public, max-age=31536000, immutable";
+  }
+  return headers;
+}
+
 function serveStatic(req, res) {
   const urlPath = decodeURIComponent((req.url || "/").split("?")[0]);
   const safePath = urlPath === "/" ? "/index.html" : urlPath;
@@ -248,7 +286,12 @@ function serveStatic(req, res) {
       return;
     }
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, { "Content-Type": mimeTypes[ext] || "application/octet-stream" });
+    res.writeHead(200, {
+      "Content-Type": mimeTypes[ext] || "application/octet-stream",
+      // Mirrors netlify.toml so a CSP violation shows up in local development
+      // rather than being discovered after deploying.
+      ...securityHeaders(relative)
+    });
     res.end(data);
   });
 }
