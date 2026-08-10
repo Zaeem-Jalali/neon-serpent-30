@@ -292,12 +292,12 @@
     { name: "Hyper Hive", desc: "A dense cross maze with almost no safe guesses.", target: 8, layout: "cross", walls: 22, hazards: 4, enemies: 0, portals: 2, powerups: 1, timer: 52, mirror: false, shrink: 12 },
 
     // --- Hard Pro Max (7 moves/sec, rival snakes appear) ---
-    { name: "Synth Spiral", desc: "Rival snakes arrive. They move slower than you — use that.", target: 8, layout: "spiral", walls: 24, hazards: 4, enemies: 3, portals: 2, powerups: 1, timer: 50, mirror: false, shrink: 12 },
-    { name: "Neon Nexus", desc: "Three rivals, multiple drones, and a smaller safe zone.", target: 9, layout: "fortress", walls: 24, hazards: 4, enemies: 3, portals: 2, powerups: 1, timer: 48, mirror: false, shrink: 10 },
-    { name: "Corrupt Core", desc: "The edges are unsafe and the board is no longer generous.", target: 9, layout: "chaos", walls: 24, hazards: 5, enemies: 3, portals: 2, powerups: 1, timer: 46, mirror: false, shrink: 10 },
-    { name: "Overclock", desc: "Narrow lanes, hard turns, and rivals cutting you off.", target: 9, layout: "maze", walls: 26, hazards: 5, enemies: 3, portals: 2, powerups: 1, timer: 44, mirror: false, shrink: 8 },
-    { name: "Final Grid", desc: "Almost everything on this board is dangerous.", target: 9, layout: "rings", walls: 26, hazards: 5, enemies: 3, portals: 2, powerups: 1, timer: 42, mirror: false, shrink: 8 },
-    { name: "Singularity Prime", desc: "The final stage. Mirrored steering, four rivals, very little room.", target: 10, layout: "boss", walls: 28, hazards: 6, enemies: 4, portals: 2, powerups: 1, timer: 40, mirror: true, shrink: 6 }
+    { name: "Synth Spiral", desc: "A rival snake arrives. It moves slower than you — use that.", target: 8, layout: "spiral", walls: 24, hazards: 4, enemies: 1, portals: 2, powerups: 1, timer: 50, mirror: false, shrink: 12 },
+    { name: "Neon Nexus", desc: "One rival, multiple drones, and a smaller safe zone.", target: 9, layout: "fortress", walls: 24, hazards: 4, enemies: 1, portals: 2, powerups: 1, timer: 48, mirror: false, shrink: 10 },
+    { name: "Corrupt Core", desc: "The edges are unsafe and the board is no longer generous.", target: 9, layout: "chaos", walls: 24, hazards: 5, enemies: 1, portals: 2, powerups: 1, timer: 46, mirror: false, shrink: 10 },
+    { name: "Overclock", desc: "Narrow lanes, hard turns, and a rival cutting you off.", target: 9, layout: "maze", walls: 26, hazards: 5, enemies: 1, portals: 2, powerups: 1, timer: 44, mirror: false, shrink: 8 },
+    { name: "Final Grid", desc: "Almost everything on this board is dangerous.", target: 9, layout: "rings", walls: 26, hazards: 5, enemies: 1, portals: 2, powerups: 1, timer: 42, mirror: false, shrink: 8 },
+    { name: "Singularity Prime", desc: "The final stage. Mirrored steering, one rival, very little room.", target: 10, layout: "boss", walls: 28, hazards: 6, enemies: 1, portals: 2, powerups: 1, timer: 40, mirror: true, shrink: 6 }
   ];
 
   /* Difficulty tiers. The boundaries follow where the game actually changes
@@ -334,7 +334,7 @@
       from: 24,
       to: 29,
       movesPerSec: 7,
-      blurb: "A steady 7 moves per second, and the only tier with rival snakes — they move 2 steps per second slower than you."
+      blurb: "A steady 7 moves per second, and the only tier with a rival snake — a single hunter, moving 2 steps per second slower than you."
     }
   ];
 
