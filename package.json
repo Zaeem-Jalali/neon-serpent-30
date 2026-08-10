@@ -1,0 +1,17 @@
+{
+  "name": "neon-serpent-30",
+  "version": "1.0.0",
+  "description": "A tougher, faster snake game: 30 handcrafted levels across four difficulty tiers, with drones, portals, a closing arena and daily challenge seeds.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test",
+    "icons": "node tools/make-icons.js"
+  },
+  "keywords": ["game", "snake", "canvas", "pwa"]
+}

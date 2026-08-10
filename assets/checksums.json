@@ -1,0 +1,37 @@
+{
+  "icon-192.png": {
+    "width": 192,
+    "height": 192,
+    "pixels": "5beb2db4fd088569"
+  },
+  "icon-512.png": {
+    "width": 512,
+    "height": 512,
+    "pixels": "19b3a50d019a943c"
+  },
+  "icon-maskable-512.png": {
+    "width": 512,
+    "height": 512,
+    "pixels": "e01f8a3a5154e2cd"
+  },
+  "apple-touch-icon.png": {
+    "width": 180,
+    "height": 180,
+    "pixels": "fe48f4936cdb6d8e"
+  },
+  "favicon-32.png": {
+    "width": 32,
+    "height": 32,
+    "pixels": "d7efdbdaef00eebe"
+  },
+  "favicon-16.png": {
+    "width": 16,
+    "height": 16,
+    "pixels": "3313a4e1195ebf7f"
+  },
+  "og-image.png": {
+    "width": 1200,
+    "height": 630,
+    "pixels": "7437bfc8cd6ae819"
+  }
+}

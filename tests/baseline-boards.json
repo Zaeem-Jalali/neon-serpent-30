@@ -1,0 +1,26 @@
+{
+  "_comment": "FNV-1a fingerprints of every generated board, captured from the pre-modularisation build. Level generation is fully seeded, so these must match exactly after any refactor that claims to preserve behaviour. Regenerate deliberately (and say so) if a gameplay change intentionally alters generation.",
+  "_captured": "before Milestone 2 (module split)",
+  "_fields": "walls, portals, hazards, enemies, powerups, food, snake, stepMs, missionGoal, timer, mirror",
+  "campaign": [
+    "66c538c1", "dd7fe868", "14696eb2", "c3db527b", "d7d64b9d", "ba1db428",
+    "1014d042", "46e00000", "38b0ff39", "75afed8f", "1b985727", "8d4c0ac6",
+    "230e3dac", "e7bd7c57", "54972848", "cb5d5a13", "6222f2d8", "4b55b0df",
+    "b3c8e26a", "dcb314d", "b8820403", "1653c8d9", "1a78341f", "1f179763",
+    "5c534bf6", "5cc0a400", "f7c27aff", "db6fb77b", "f5f5b2ec", "14ab5d65"
+  ],
+  "daily-2026-08-09": [
+    "d21babd9", "5cbb335c", "c2d69c4f", "8f606b0e", "bc217f98", "206a4bc0",
+    "149d8403", "1b37cd09", "b686bdb3", "ad67c297", "fc502fcf", "6dab47b0",
+    "193af9da", "5d0f2e40", "3bcb28a1", "e5a8407f", "3ea1a075", "4ae9d5f3",
+    "3de458d3", "51f3cadc", "81910996", "fd14cc75", "b9559fc3", "40650a08",
+    "98418089", "f6a19141", "ea5cab32", "db92744", "3610e03c", "208cb92"
+  ],
+  "daily-2026-12-25": [
+    "121ad14a", "1656befd", "c7fefd7b", "b734e8f1", "966ec7db", "4d15ba6d",
+    "c06edb4f", "4fa7f5e8", "e4fa844f", "a7c60b88", "8d5e6cba", "da6a1ba7",
+    "50ca1a87", "ccbe0705", "f010eb19", "32402cb3", "3adb1017", "75c9933d",
+    "2b1d1241", "82814eb1", "71f0f089", "10f17410", "760de5a6", "12a54209",
+    "6ed91419", "1ebce31b", "5d978a19", "2ea6d185", "340377f1", "a2c8a716"
+  ]
+}

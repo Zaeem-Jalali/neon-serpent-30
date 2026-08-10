@@ -128,17 +128,52 @@ the mission panel.
 | --- | --- |
 | `index.html` | Markup and panel structure |
 | `styles.css` | Styling, both palettes, responsive rules |
-| `game.js` | Game loop, level generation, rendering, audio, persistence |
+| `src/engine.js` | **Simulation core — no DOM, no browser APIs** |
+| `src/levels.js` | Level and tier data, speed helpers |
+| `src/utils.js` | Seeded RNG and small shared helpers |
+| `src/main.js` | Presentation: rendering, audio, DOM, storage, input |
 | `sw.js` / `sw-register.js` | Service worker and its registration |
 | `manifest.json` | PWA metadata |
 | `netlify.toml` | Headers and cache rules for deployment |
 | `server.js` | Local dev server plus the `/api/scores` leaderboard |
 | `tools/make-icons.js` | Generates everything in `assets/` |
-| `tests/audit.js` | Level audit harness (see below) |
+| `tests/engine.test.js` | Node test suite (see below) |
+| `tests/audit.js` | Browser audit harness |
 
 Scores post to `data/scores.json`, which is created on demand and git-ignored.
 
+### The engine boundary
+
+`src/engine.js` must never touch the DOM, the canvas, `localStorage`, `fetch`
+or any other browser API. Everything the player should see or hear is reported
+through an `emit` callback — sounds, particle bursts, floating text, overlay
+changes, save requests — and `src/main.js` decides what to do with them.
+
+That one rule is what makes the simulation testable under Node, and it is the
+prerequisite for validating submitted runs server-side later: because level
+generation is fully seeded, a run reduces to `{seed, startLevel, inputs[]}`
+which the same engine can replay and score.
+
 ## Testing
+
+```bash
+npm test
+```
+
+Runs `tests/engine.test.js` under `node --test` with no browser involved. It
+covers tier/speed invariants, rival placement and speed, mirrored steering,
+tail-following, board legality and reachability on every level of every seed,
+and that the closing arena never strands the core.
+
+It also compares every generated board against `tests/baseline-boards.json` —
+fingerprints captured before the module split. Any drift in level generation
+fails the suite loudly. Regenerate that file only when a gameplay change is
+*meant* to alter generation, and say so in the commit.
+
+CI (`.github/workflows/ci.yml`) runs the suite on Node 20 and 22, and checks
+that the committed art still matches `tools/make-icons.js`.
+
+### Browser audit
 
 `tests/audit.js` drives the real game through the `window.__neonDebug` seam and
 checks every level of every seed: that nothing spawns inside a wall or out of

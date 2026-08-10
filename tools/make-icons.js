@@ -8,11 +8,14 @@
  * Keeping this as code rather than binary blobs means the artwork can be
  * re-tuned when the palette changes.
  */
-const zlib = require("node:zlib");
-const fs = require("node:fs");
-const path = require("node:path");
+import zlib from "node:zlib";
+import fs from "node:fs";
+import path from "node:path";
+import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
-const OUT_DIR = path.join(__dirname, "..", "assets");
+const here = path.dirname(fileURLToPath(import.meta.url));
+const OUT_DIR = path.join(here, "..", "assets");
 
 /* ---------------------------------------------------------------- PNG ---- */
 
@@ -417,9 +420,20 @@ function drawSocialCard(width = 1200, height = 630) {
 
 /* ---------------------------------------------------------------- run ---- */
 
+/* Checksums are taken over the raw RGBA pixels, not the encoded PNG. Pixel
+   data is pure arithmetic and therefore identical on every platform, whereas
+   zlib's compressed output can vary between versions — so this is what CI
+   compares to catch "generator edited but assets not regenerated". */
+const checksums = {};
+
 function write(name, canvas) {
   const file = path.join(OUT_DIR, name);
   fs.writeFileSync(file, encodePng(canvas));
+  checksums[name] = {
+    width: canvas.width,
+    height: canvas.height,
+    pixels: createHash("sha256").update(canvas.data).digest("hex").slice(0, 16)
+  };
   const kb = (fs.statSync(file).size / 1024).toFixed(1);
   console.log(`  ${name.padEnd(28)} ${canvas.width}x${canvas.height}  ${kb} KB`);
 }
@@ -433,4 +447,10 @@ write("apple-touch-icon.png", drawIcon(180));
 write("favicon-32.png", drawIcon(32));
 write("favicon-16.png", drawIcon(16));
 write("og-image.png", drawSocialCard());
-console.log("Done.");
+
+fs.writeFileSync(
+  path.join(OUT_DIR, "checksums.json"),
+  JSON.stringify(checksums, null, 2) + "\n",
+  "utf8"
+);
+console.log("Done. Wrote assets/checksums.json.");

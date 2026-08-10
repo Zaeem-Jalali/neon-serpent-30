@@ -17,13 +17,16 @@
  * Bump CACHE_VERSION whenever a precached file changes; the activate handler
  * deletes every other cache so old assets cannot linger.
  */
-const CACHE_VERSION = "neon-serpent-v1";
+const CACHE_VERSION = "neon-serpent-v2";
 
 const PRECACHE = [
   "./",
   "./index.html",
   "./styles.css",
-  "./game.js",
+  "./src/main.js",
+  "./src/engine.js",
+  "./src/levels.js",
+  "./src/utils.js",
   "./sw-register.js",
   "./manifest.json",
   "./assets/favicon.svg",

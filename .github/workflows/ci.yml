@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Engine tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # 20 is the floor declared in package.json; 22 is current LTS.
+        node: [20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # There are no dependencies to install — the project is deliberately
+      # framework-free — so this goes straight to the suite. It exercises the
+      # real simulation from src/engine.js with no browser, and fails if any
+      # generated board drifts from tests/baseline-boards.json.
+      - name: Run tests
+        run: npm test
+
+  assets:
+    name: Generated assets are current
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The icons and social card are generated from tools/make-icons.js and
+      # committed. If someone edits the generator without re-running it, the
+      # committed art silently stops matching the code — this catches that.
+      #
+      # Only assets/checksums.json is compared: it hashes the raw RGBA pixels,
+      # which are pure arithmetic and identical everywhere. The PNG bytes
+      # themselves are not compared, because zlib's compressed output can
+      # legitimately differ between platforms and would make this flaky.
+      - name: Regenerate icons
+        run: npm run icons
+
+      - name: Fail if generated art is out of date
+        run: |
+          if ! git diff --quiet -- assets/checksums.json; then
+            echo "Generated art is stale. Run 'npm run icons' and commit the result."
+            git diff -- assets/checksums.json
+            exit 1
+          fi
+          echo "Generated art matches the generator."

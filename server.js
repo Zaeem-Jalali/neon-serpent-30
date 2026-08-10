@@ -1,9 +1,10 @@
-const http = require("node:http");
-const fs = require("node:fs");
-const fsp = require("node:fs/promises");
-const path = require("node:path");
+import http from "node:http";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = __dirname;
+const root = path.dirname(fileURLToPath(import.meta.url));
 const port = process.env.PORT ? Number(process.env.PORT) : 4173;
 
 const dataDir = path.join(root, "data");
