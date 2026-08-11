@@ -70,6 +70,18 @@ test("engine imports and runs with no DOM present", () => {
   assert.equal(typeof engine.step, "function");
 });
 
+test("starting a Daily Rift run through the real public API does not throw", () => {
+  /* Regression test. prepareDailySeed() used to write straight to seedLabel
+     and challengeCode DOM elements that only exist in main.js's separate
+     module scope, so this crashed the instant a real player picked Daily
+     Rift and hit Start — invisibly, because every other test and the debug
+     harness set state.seed directly and never went through resetRun(). */
+  const engine = createEngine({});
+  engine.state.mode = "daily";
+  assert.doesNotThrow(() => engine.resetRun());
+  assert.match(engine.state.seed, /^daily-\d{4}-\d{2}-\d{2}$/);
+});
+
 test("level and tier data is well formed", () => {
   assert.equal(LEVELS.length, 30);
   assert.equal(TIERS.length, 4);

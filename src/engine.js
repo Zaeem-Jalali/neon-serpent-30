@@ -1378,17 +1378,18 @@ export function createEngine({ emit = () => {} } = {}) {
     return candidates.reduce((best, cp) => (cp.level > best.level ? cp : best));
   }
 
+  /* A leftover from the original module split touched seedLabel/challengeCode
+     DOM elements directly here, which do not exist in this module's scope —
+     engine.js and main.js are separate closures. That crashed the instant a
+     real player picked Daily Rift and hit Start ("seedLabel is not defined"),
+     invisibly, because every test and debug helper sets state.seed directly
+     and never calls this function. The label already updates correctly on its
+     own: loadLevel() emits "ui" right after this runs, and main.js's
+     updateHUD() reads state.seed from there. */
   function prepareDailySeed() {
     const now = new Date();
     const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     state.seed = `daily-${stamp}`;
-    seedLabel.textContent = stamp;
-    challengeCode.textContent = state.seed;
-  }
-
-
-  function insidePlayfield(x, y) {
-    return x >= 0 && y >= 0 && x < GRID.cols && y < GRID.rows;
   }
 
   return {
