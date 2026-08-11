@@ -18,6 +18,8 @@ import {
   MAX_LIVES,
   MIN_OPEN_CELLS,
   MAX_SHRINK_MARGIN,
+  BOSS_SHARDS_PER_CYCLE,
+  BOSS_ARENA_HALF_SPAN,
   tierForLevel,
   playerMovesPerSec,
   rivalMovesPerSec
@@ -68,7 +70,11 @@ export function createEngine({ emit = () => {} } = {}) {
     shield: 0,
     message: "Tap Start Game to begin.",
     checkpoint: null,
-    runStartLevel: 0
+    runStartLevel: 0,
+    // null outside boss levels. See the "Boss encounters" section below.
+    boss: null,
+    bossCharges: [],
+    bossCorePos: null
   };
 
   function loadLevel(levelIndex) {
@@ -81,6 +87,9 @@ export function createEngine({ emit = () => {} } = {}) {
     state.powerups = [];
     state.walls = new Set();
     state.food = null;
+    state.boss = null;
+    state.bossCharges = [];
+    state.bossCorePos = null;
     emit("clearEffects");
     state.shield = 0;
     state.floatingSlowTicks = 0;
@@ -102,6 +111,10 @@ export function createEngine({ emit = () => {} } = {}) {
     state.grow = 0;
 
     buildStaticMap(state.currentLevel);
+    // Reserved before anything else spawns, so portals/hazards/powerups —
+    // all placed via randomFreeCell, which avoids state.walls — never land
+    // on top of the core.
+    reserveBossCore(state.currentLevel);
     spawnPortals(state.currentLevel.portals);
     spawnHazards(state.currentLevel.hazards);
     spawnEnemies(state.currentLevel.enemies);
@@ -136,11 +149,35 @@ export function createEngine({ emit = () => {} } = {}) {
       timer: base.timer,
       mirror: base.mirror,
       shrink: base.shrink,
+      boss: base.boss || null,
       rng
     };
   }
 
+  /* Boss stages put the player and the core on opposite sides of the arena's
+     centre line rather than at true centre, so the fight opens with the whole
+     room between you and the shield. bossArenaAnchors() is the single source
+     of truth for both positions — buildStaticMap's safe-zone clearing and
+     clearSpawnArea() both read the player's half from here too, so nothing
+     drifts out of sync if the span constant ever changes. */
+  function bossArenaAnchors() {
+    const centerX = Math.floor(GRID.cols / 2);
+    const centerY = Math.floor(GRID.rows / 2);
+    return {
+      player: { x: centerX - BOSS_ARENA_HALF_SPAN, y: centerY },
+      core: { x: centerX + BOSS_ARENA_HALF_SPAN, y: centerY }
+    };
+  }
+
   function buildSnakeStart() {
+    if (state.currentLevel?.boss) {
+      const { player } = bossArenaAnchors();
+      return [
+        { x: player.x, y: player.y },
+        { x: player.x - 1, y: player.y },
+        { x: player.x - 2, y: player.y }
+      ];
+    }
     const startX = Math.floor(GRID.cols / 2);
     const startY = Math.floor(GRID.rows / 2);
     return [
@@ -297,20 +334,32 @@ export function createEngine({ emit = () => {} } = {}) {
       carveGate(18, 11, 1);
       scatterBlocks(level.walls - 10, rng, 2, 2);
     } else if (layout === "boss") {
-      addRect(5, 4, 24, 15);
-      addLine(8, 7, 21, 7);
-      addLine(8, 12, 21, 12);
-      addLine(8, 7, 8, 12);
-      addLine(21, 7, 21, 12);
-      carveGate(14, 7, 1);
-      carveGate(14, 12, 1);
-      carveGate(8, 10, 1);
-      carveGate(21, 9, 1);
-      scatterBlocks(level.walls - 8, rng, 3, 2);
+      /* A single open room rather than the nested-box mazes used elsewhere.
+         A boss fight needs a clear sightline to the core and room to dodge
+         its attacks, not corridors to get lost navigating — the difficulty
+         here comes from the encounter, not the architecture. Wide gates on
+         all four sides, light scattered cover kept away from the direct
+         line between spawn and core so it reads as an arena, not a maze. */
+      addRect(4, 3, 25, 16);
+      carveGate(4, 9, 1);
+      carveGate(4, 10, 1);
+      carveGate(25, 9, 1);
+      carveGate(25, 10, 1);
+      carveGate(14, 3, 1);
+      carveGate(15, 3, 1);
+      carveGate(14, 16, 1);
+      carveGate(15, 16, 1);
+      scatterBlocks(Math.max(0, level.walls - 4), rng, 1, 1);
     }
 
-    // Ensure the start area stays playable.
-    clearSafeZone(Math.floor(GRID.cols / 2), Math.floor(GRID.rows / 2), 3);
+    // Ensure the start area stays playable. Anchored on the snake's actual
+    // spawn point rather than assumed true-centre, since boss stages start
+    // the player off-centre (see bossArenaAnchors()).
+    const startAnchor = state.snake[0] || {
+      x: Math.floor(GRID.cols / 2),
+      y: Math.floor(GRID.rows / 2)
+    };
+    clearSafeZone(startAnchor.x, startAnchor.y, 3);
   }
 
   /* ------------------------------------------------------------------
@@ -340,7 +389,11 @@ export function createEngine({ emit = () => {} } = {}) {
     }
 
     // Placed last so it can only ever land in the validated open region.
-    spawnFood();
+    if (state.currentLevel?.boss) {
+      spawnBoss(state.currentLevel.boss);
+    } else {
+      spawnFood();
+    }
   }
 
   // Flood fill of the cells the snake can actually drive to, walls only.
@@ -377,6 +430,11 @@ export function createEngine({ emit = () => {} } = {}) {
   function carveFrontier(region) {
     const dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
     const candidates = [];
+    // The boss's shielded core is placed as a single wall cell (see
+    // reserveBossCore) and must never be carved open before the fight even
+    // starts — the arena is already sized generously enough that carving
+    // should rarely be needed on a boss stage at all.
+    const protectedCell = state.bossCorePos ? key(state.bossCorePos.x, state.bossCorePos.y) : null;
 
     for (const tileKey of region) {
       const [x, y] = tileKey.split(":").map(Number);
@@ -385,6 +443,7 @@ export function createEngine({ emit = () => {} } = {}) {
         const ny = y + dir.y;
         if (!insidePlayableArea(nx, ny)) continue;
         const neighbour = key(nx, ny);
+        if (neighbour === protectedCell) continue;
         if (state.walls.has(neighbour)) candidates.push(neighbour);
       }
     }
@@ -652,6 +711,287 @@ export function createEngine({ emit = () => {} } = {}) {
     return visited;
   }
 
+  /* ------------------------------------------------------------------
+   * Boss encounters
+   *
+   * Snake has no attack button, so a boss cannot be damaged the way one
+   * would be in a genre that has one. It is damaged by the thing snake
+   * already does: eating grows you, so eating is the weapon here too, not
+   * just a means to an end.
+   *
+   * The loop: the core is shielded (a single wall cell — the multi-cell
+   * structure the player sees is a cosmetic sprite drawn in the renderer,
+   * not a hitbox). Charge shards appear; eating BOSS_SHARDS_PER_CYCLE of
+   * them grows the snake and opens the shield for a short window. Step onto
+   * the exposed core during that window to land a hit; miss the window and
+   * it closes, resetting the cycle. Every shard eaten to fuel that window
+   * also makes the snake longer, which eats into the room available to
+   * dodge whatever the boss throws next — the same action is the reward and
+   * the escalating risk, which is not something any button-driven genre's
+   * "weapon" can do.
+   *
+   * Harder bosses do not get new rules, only a tighter exposed window and
+   * an attack layered on top that reuses a mechanic the campaign already
+   * taught: The Disruptor forces the same mirrored steering as a Hard-tier
+   * stage, The Collapse pulses the same shrinking cage as an Extreme-tier
+   * stage, and Singularity Prime alternates both while a hunting fragment —
+   * an ordinary rival snake — chases throughout. A player who has cleared
+   * the campaign has already been taught every individual piece of the
+   * final boss; the fight is just all of them at once.
+   * --------------------------------------------------------------- */
+  const BOSS_DEFS = {
+    warden: {
+      exposedTicks: 40,
+      attack: "none"
+    },
+    disruptor: {
+      exposedTicks: 32,
+      attack: "mirror",
+      attackCooldown: 18,
+      attackTelegraph: 6,
+      attackDuration: 14
+    },
+    collapse: {
+      exposedTicks: 26,
+      attack: "shrink",
+      attackCooldown: 16,
+      attackTelegraph: 6,
+      attackDuration: 12,
+      // Absolute margin during a pulse, not an increment — see beginBossAttack.
+      // Boss levels configure shrink:0, so 0 is always the baseline to release
+      // back to. The binding safety constraint is the player's own spawn tail
+      // at (centre.x - BOSS_ARENA_HALF_SPAN - 2, centre.y), which tolerates a
+      // margin of at most 5; 4 leaves a one-cell margin of error on that.
+      shrinkTarget: 4
+    },
+    singularity: {
+      exposedTicks: 22,
+      attack: "combo",
+      attackCooldown: 14,
+      attackTelegraph: 6,
+      attackDuration: 12,
+      shrinkTarget: 4
+    }
+  };
+
+  // Reserves the core's cell as a wall before anything else spawns, so
+  // portals, drones and powerups (all placed via randomFreeCell, which
+  // already avoids state.walls) never land on top of it. Placed at true
+  // centre, which is provably the safest possible cell against any shrink
+  // pulse: it is farther from every edge than anywhere else on the board.
+  function reserveBossCore(level) {
+    if (!level.boss) {
+      state.bossCorePos = null;
+      return;
+    }
+    const { core } = bossArenaAnchors();
+    state.bossCorePos = core;
+    state.walls.add(key(core.x, core.y));
+  }
+
+  // Finalises the encounter once the board is otherwise validated: builds
+  // the state.boss record and spawns the first cycle of charge shards.
+  // Takes the place of spawnFood() in ensurePlayableBoard() for boss levels.
+  function spawnBoss(bossId) {
+    const def = BOSS_DEFS[bossId];
+    state.boss = {
+      id: bossId,
+      def,
+      hitsRequired: state.missionGoal,
+      hitsTaken: 0,
+      phase: "charging",
+      core: state.bossCorePos,
+      attackCooldown: def.attackCooldown || Infinity,
+      attackTelegraphTicks: 0,
+      attackActiveTicks: 0,
+      attackKind: null,
+      exposedTicksLeft: 0
+    };
+    state.bossCharges = [];
+    state.food = null;
+    spawnBossCharges(BOSS_SHARDS_PER_CYCLE);
+  }
+
+  function spawnBossCharges(count) {
+    for (let i = 0; i < count; i++) {
+      const avoid = state.bossCharges.map((c) => ({ x: c.x, y: c.y }));
+      const pos = randomFreeCell(2, avoid);
+      if (!pos) continue;
+      state.bossCharges.push({ x: pos.x, y: pos.y });
+    }
+  }
+
+  // Parallel to collectPowerups: growth and score come from the shard, the
+  // overload progress comes from how many are left to clear this cycle.
+  function collectBossCharges(x, y) {
+    if (!state.boss) return;
+    const index = state.bossCharges.findIndex((c) => c.x === x && c.y === y);
+    if (index === -1) return;
+    state.bossCharges.splice(index, 1);
+    state.score += 20 + state.levelIndex * 2;
+    state.grow += 2;
+    emit("burst", { x, y, color: "bonus" });
+    emit("sound", "bossCharge");
+    if (state.bossCharges.length === 0) {
+      openBossCore();
+    }
+  }
+
+  function openBossCore() {
+    const boss = state.boss;
+    if (!boss) return;
+    // A clean, focused window: whatever the boss was doing reverts the
+    // instant the shield cracks, so landing the hit is never muddied by a
+    // lingering mirror flip or a cage still mid-pulse.
+    cancelBossAttack();
+    boss.phase = "exposed";
+    boss.exposedTicksLeft = boss.def.exposedTicks;
+    state.walls.delete(key(boss.core.x, boss.core.y));
+    state.food = { x: boss.core.x, y: boss.core.y };
+    emit("sound", "bossPhaseOpen");
+    emit("floating", { text: "CORE EXPOSED", x: boss.core.x, y: boss.core.y - 2, color: "food", life: 40 });
+  }
+
+  // Re-shields the core, whether the window closed because it was struck or
+  // because the player missed it. hit=false is a real cost for whiffing: the
+  // whole three-shard cycle has to be repeated.
+  function closeBossCore(hit) {
+    const boss = state.boss;
+    if (!boss) return;
+    boss.phase = "charging";
+    state.walls.add(key(boss.core.x, boss.core.y));
+    state.food = null;
+    if (!hit) {
+      emit("floating", { text: "Shield reformed", x: boss.core.x, y: boss.core.y - 2, color: "hazard", life: 34 });
+    }
+    spawnBossCharges(BOSS_SHARDS_PER_CYCLE);
+  }
+
+  // Called from the eating branch of step() when the cell just entered is
+  // the boss's exposed core. Growth is deliberately NOT applied here — it
+  // already came from the charge shards that opened this window, so a hit
+  // is a tag, not a meal.
+  function handleBossHit() {
+    const boss = state.boss;
+    boss.hitsTaken++;
+    const multiplier = Math.max(1, state.bonusMultiplier || 1);
+    state.score += (150 + state.levelIndex * 10) * multiplier;
+    state.bonusMultiplier = 1;
+    emit("burst", { x: boss.core.x, y: boss.core.y, color: "bonus" });
+    emit("sound", "bossHit");
+    emit("shake", { strength: 6, ticks: 10 });
+    emit("flash", { color: "#ffffff", ticks: 6 });
+
+    if (boss.hitsTaken >= boss.hitsRequired) {
+      boss.phase = "defeated";
+      emit("sound", "bossDefeated");
+      emit("shake", { strength: 12, ticks: 22 });
+      emit("burst", { x: boss.core.x, y: boss.core.y, color: "mint" });
+      emit("floating", { text: "CORE DESTROYED", x: boss.core.x, y: boss.core.y - 2, color: "mint", life: 50 });
+      // The wall stays down and the fight is over; levelComplete() (driven
+      // by the same state.mission check every other level uses) handles the
+      // rest immediately after this returns.
+    } else {
+      closeBossCore(true);
+    }
+  }
+
+  /* Per-tick boss update: advances the exposed-window countdown and the
+     attack cycle. Called once per step(), before movement is resolved, and
+     is a complete no-op once the boss is defeated or on non-boss levels. */
+  function updateBoss() {
+    const boss = state.boss;
+    if (!boss || boss.phase === "defeated") return;
+
+    if (boss.phase === "exposed") {
+      boss.exposedTicksLeft--;
+      if (boss.exposedTicksLeft <= 0) {
+        closeBossCore(false);
+      }
+      return;
+    }
+
+    // Attacks only run while the shield is up, and never on the tutorial boss.
+    if (boss.def.attack === "none") return;
+
+    if (boss.attackActiveTicks > 0) {
+      boss.attackActiveTicks--;
+      if (boss.attackActiveTicks === 0) endBossAttack();
+      return;
+    }
+
+    if (boss.attackTelegraphTicks > 0) {
+      boss.attackTelegraphTicks--;
+      if (boss.attackTelegraphTicks === 0) beginBossAttack();
+      return;
+    }
+
+    boss.attackCooldown--;
+    if (boss.attackCooldown <= 0) {
+      boss.attackCooldown = boss.def.attackCooldown;
+      boss.attackTelegraphTicks = boss.def.attackTelegraph;
+      const kind = boss.def.attack === "combo"
+        ? (boss.attackKind === "mirror" ? "shrink" : "mirror")
+        : boss.def.attack;
+      boss.attackKind = kind;
+      const label = kind === "mirror" ? "◆ Controls flipping ◆" : "▲ Cage compressing ▲";
+      /* `life` decays in real animation frames (~1 per 16.7ms) regardless of
+         how fast the game itself is ticking, but the telegraph is specified
+         in GAME ticks — and a tick is worth less real time on faster tiers.
+         A flat multiplier undershot badly at higher speeds: on Singularity
+         Prime the 6-tick window is only ~860ms of real time, and the banner
+         was vanishing in ~300ms, well before a player could act on it. Sized
+         here off the actual step duration, with a buffer so the text is
+         still legible for a beat after the window itself opens. */
+      const telegraphMs = boss.def.attackTelegraph * (state.stepMs || 200);
+      emit("floating", { text: label, x: boss.core.x - BOSS_ARENA_HALF_SPAN, y: boss.core.y - 3, color: "slow", life: telegraphMs / 16.6667 + 20 });
+      emit("sound", "bossAttackWarn");
+    }
+  }
+
+  function beginBossAttack() {
+    const boss = state.boss;
+    boss.attackActiveTicks = boss.def.attackDuration;
+    if (boss.attackKind === "mirror") {
+      state.mirror = true;
+    } else if (boss.attackKind === "shrink") {
+      // Set to an absolute, pre-verified-safe target rather than adding to
+      // whatever the margin currently is — additive boosts ratchet upward
+      // across repeated pulses with nothing to bring them back down, which
+      // is how an earlier version of this reached margin 8 (unsafe for both
+      // the core and the player's own spawn tail) and never released.
+      if (boss.def.shrinkTarget !== state.shrinkMargin) {
+        state.shrinkMargin = boss.def.shrinkTarget;
+        onArenaShrunk();
+      }
+    }
+    emit("sound", "bossPhaseOpen");
+  }
+
+  function endBossAttack() {
+    const boss = state.boss;
+    if (boss.attackKind === "mirror") {
+      state.mirror = state.currentLevel?.mirror || false;
+    } else if (boss.attackKind === "shrink") {
+      // Boss levels configure shrink:0, so the cage's resting state is
+      // always fully open — there is no passive baseline to fall back to.
+      state.shrinkMargin = 0;
+    }
+  }
+
+  // Forces any in-flight attack to end immediately, used when the core opens
+  // and when the player dies mid-fight — neither should leave the arena in a
+  // half-reverted state.
+  function cancelBossAttack() {
+    const boss = state.boss;
+    if (!boss) return;
+    if (boss.attackActiveTicks > 0) {
+      endBossAttack();
+    }
+    boss.attackActiveTicks = 0;
+    boss.attackTelegraphTicks = 0;
+  }
+
   function requestDirection(dirName) {
     if (!state.running || state.paused || state.over || state.won) return;
     const mapping = {
@@ -710,7 +1050,10 @@ export function createEngine({ emit = () => {} } = {}) {
     }
 
     movePowerups();
-
+    updateBoss();
+    if (state.paused || state.over || state.won) {
+      return;
+    }
 
     if (!slowed || state.levelTick % 2 === 0) {
       moveHazards();
@@ -761,16 +1104,25 @@ export function createEngine({ emit = () => {} } = {}) {
 
     state.snake.unshift(next);
 
+    // On a boss level, state.food only ever exists during the exposed
+    // window and only ever equals the core's position — so eating it here
+    // can only mean the core was just struck.
+    const isBossHit = eating && !!state.boss;
+
     if (eating) {
       state.mission++;
-      const multiplier = Math.max(1, state.bonusMultiplier || 1);
-      state.score += (12 + state.levelIndex * 3) * multiplier;
-      state.grow += 1 + Math.floor(state.levelIndex / 10);
-      emit("burst", { x: next.x, y: next.y, color: "food" });
-      emit("sound", "eat");
-      spawnFood();
-      maybeSpawnBonus();
-      state.bonusMultiplier = 1;
+      if (isBossHit) {
+        handleBossHit();
+      } else {
+        const multiplier = Math.max(1, state.bonusMultiplier || 1);
+        state.score += (12 + state.levelIndex * 3) * multiplier;
+        state.grow += 1 + Math.floor(state.levelIndex / 10);
+        emit("burst", { x: next.x, y: next.y, color: "food" });
+        emit("sound", "eat");
+        spawnFood();
+        maybeSpawnBonus();
+        state.bonusMultiplier = 1;
+      }
       if (state.mission >= state.missionGoal) {
         levelComplete();
         return;
@@ -778,6 +1130,7 @@ export function createEngine({ emit = () => {} } = {}) {
     }
 
     collectPowerups(next.x, next.y);
+    collectBossCharges(next.x, next.y);
 
     if (state.grow > 0) {
       state.grow--;
@@ -800,8 +1153,14 @@ export function createEngine({ emit = () => {} } = {}) {
        replacement core lands across a wall. Checking before the move meant a
        stranded core survived a whole tick before anyone noticed.
        A flood fill over 600 cells is nothing next to a stage that cannot be
-       finished. */
-    if (state.food && !foodReachable()) {
+       finished.
+       Skipped on boss levels: state.food there is the boss's own core, at a
+       fixed position by design, and relocating it would break the encounter
+       rather than fix anything. The arena is generous enough (see
+       bossArenaAnchors) that the only realistic way to wall it off is the
+       player coiling their own body around it, which is a self-inflicted
+       problem the safety net was never meant to solve. */
+    if (state.food && !state.boss && !foodReachable()) {
       relocateFood();
     }
 
@@ -1117,7 +1476,15 @@ export function createEngine({ emit = () => {} } = {}) {
 
   function collisionReason(cell, willGrow) {
     if (!insidePlayableArea(cell.x, cell.y)) return "You hit the outer wall";
-    if (state.walls.has(key(cell.x, cell.y))) return "You hit an obstacle";
+    if (state.walls.has(key(cell.x, cell.y))) {
+      // Only reachable when the shield is actually up: openBossCore() removes
+      // the core from state.walls for the exposed window, so this can never
+      // fire on the one tick it would be wrong to.
+      if (state.boss && cell.x === state.boss.core.x && cell.y === state.boss.core.y) {
+        return "The shielded core repels you — it is not open yet";
+      }
+      return "You hit an obstacle";
+    }
     if (inShrinkZone(cell.x, cell.y)) return "The closing edge caught you";
 
     // Terrain still kills during the respawn grace window; moving threats do not.
@@ -1267,13 +1634,28 @@ export function createEngine({ emit = () => {} } = {}) {
     emit("clearEffects");
     clearSpawnArea();
 
+    /* A mid-fight death always hands back a clean, fully-charged cycle:
+       cancel whatever attack was active (nobody should respawn with controls
+       still flipped from a life they already lost), and if the core happened
+       to be open, close it and deal a fresh set of shards rather than resume
+       a window that may be mostly spent. hitsTaken is untouched — dying does
+       not undo damage already landed on the boss, same as normal levels never
+       take back cores already collected on a death. */
+    if (state.boss && state.boss.phase !== "defeated") {
+      cancelBossAttack();
+      if (state.boss.phase === "exposed") {
+        closeBossCore(false);
+      }
+    }
+
     /* Re-validate the core against the new spawn position. Respawning moves
        the snake right across the board, so a core that was reachable from
        wherever it died may be sealed off from the centre — and if the player
        died *because* they were boxed in, the core was very likely relocated
        into that same pocket moments earlier. Without this the stage can come
-       back unwinnable. */
-    if (state.food && !foodReachable()) {
+       back unwinnable. Skipped on boss levels for the same reason step()
+       skips it: the core's position is fixed by design, not relocatable. */
+    if (state.food && !state.boss && !foodReachable()) {
       relocateFood();
     }
 
@@ -1285,8 +1667,15 @@ export function createEngine({ emit = () => {} } = {}) {
   // Move anything lethal out of the respawn pocket so the player always gets
   // a fair moment to react.
   function clearSpawnArea() {
-    const cx = Math.floor(GRID.cols / 2);
-    const cy = Math.floor(GRID.rows / 2);
+    // Anchored on wherever the snake actually is, not assumed true-centre —
+    // boss stages spawn the player off-centre (see bossArenaAnchors()), and
+    // state.snake is always set by buildSnakeStart() before this runs.
+    const anchor = state.snake[0] || {
+      x: Math.floor(GRID.cols / 2),
+      y: Math.floor(GRID.rows / 2)
+    };
+    const cx = anchor.x;
+    const cy = anchor.y;
     const radius = 3;
     const nearSpawn = (x, y) => Math.abs(x - cx) <= radius && Math.abs(y - cy) <= radius;
 

@@ -101,14 +101,51 @@ Two constants in `src/levels.js` set the safety floor:
 - `MAX_SHRINK_MARGIN` — how far the closing arena may ever advance, which fixes
   the size of the final playfield.
 
-**Mirrored stages** (levels 10, 20 and 30) swap left and right but leave up and
+**Mirrored stages** (levels 10 and 20) swap left and right but leave up and
 down alone. Flipping both axes meant every input had to be mentally reversed,
 which read as unfair rather than interesting; mirroring one axis keeps the idea
 while staying playable. Each mirrored stage announces itself on the board and in
-the mission panel.
+the mission panel. Levels 16 and 30 also mirror steering, but as a *boss attack*
+rather than a static stage property — see below.
+
+## Boss encounters
+
+Every tier ends in a boss: level 8 (**The Warden**), 16 (**The Disruptor**), 24
+(**The Collapse**) and 30 (**Singularity Prime**). Snake has no attack button,
+so a boss cannot be damaged the way one would be in a genre that has one — it
+is damaged by the thing snake already does: eating grows you, so eating is the
+weapon here too.
+
+**The loop.** Each boss's core is shielded — touching it is fatal, same as any
+wall. Eating `BOSS_SHARDS_PER_CYCLE` (3) charge shards grows the snake *and*
+cracks the shield open for a short window; step onto the exposed core during
+that window to land a hit, then it snaps shut and the cycle repeats. Missing
+the window costs the whole cycle — the shield reforms and a fresh set of
+shards spawns. Hits required scale with the tier: 2 / 3 / 4 / 5.
+
+**The same action is the reward and the risk.** Every shard eaten to open the
+window also makes the snake longer, which eats into the room available to
+dodge whatever the boss does next. No genre with a separate attack button can
+put that particular tension in a boss fight — here the weapon and the growing
+hazard are the same thing.
+
+**Bosses fight you with your own campaign**, rather than inventing generic
+attacks: The Disruptor forces the same mirrored steering as a Hard-tier stage,
+The Collapse pulses the same shrinking cage as an Extreme-tier stage (bounded
+by a `shrinkTarget` verified safe for both the core and the player's own spawn
+point — see `tools/reachability-probe.mjs`), and Singularity Prime alternates
+both while a hunting fragment (an ordinary rival snake) chases throughout. By
+the final boss, the fight is a remix of every mechanic the campaign already
+taught.
+
+Attacks only run while the shield is up — landing the hit always happens under
+clean, predictable conditions, and a telegraph (a floating banner plus a
+colour shift on the shield itself) gives real warning before an attack fires.
 
 ## Features
 
+- **Four boss encounters**, one closing out each tier — see "Boss encounters"
+  above.
 - **Level select** (the *Levels* button, or `L`) showing all 30 levels by tier,
   each with its speed, drone/rival counts and modifiers. Levels unlock one at a
   time as you clear the previous one, and cleared levels keep a per-level best.
@@ -149,6 +186,7 @@ the mission panel.
 | `tools/make-icons.js` | Generates everything in `assets/` |
 | `tools/difficulty-report.mjs` | Measures what each level actually demands |
 | `tools/update-baseline.mjs` | Re-records board fingerprints, deliberately |
+| `tools/reachability-probe.mjs` | Checks the core is reachable on every single tick, not just at spawn |
 | `tests/engine.test.js` | Node test suite (see below) |
 | `tests/audit.js` | Browser audit harness |
 

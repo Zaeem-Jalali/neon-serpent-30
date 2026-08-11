@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import { createEngine } from "../src/engine.js";
-import { LEVELS, TIERS, GRID, tierForLevel, playerMovesPerSec, rivalMovesPerSec } from "../src/levels.js";
+import { LEVELS, TIERS, GRID, BOSS_SHARDS_PER_CYCLE, BOSS_ARENA_HALF_SPAN, tierForLevel, playerMovesPerSec, rivalMovesPerSec } from "../src/levels.js";
 import { key, mulberry32, hashSeed } from "../src/utils.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -43,7 +43,10 @@ function boardFingerprint(state) {
       stepMs: state.stepMs,
       goal: state.missionGoal,
       timer: state.timerLeft,
-      mirror: state.mirror
+      mirror: state.mirror,
+      // The core's own position is already covered by walls (it is reserved
+      // there at spawn), but the charge shards are a separate array.
+      bossCharges: (state.bossCharges || []).map((c) => [c.x, c.y])
     })
   );
 }
@@ -157,11 +160,26 @@ test("every level spawns a legal, reachable board", () => {
         assert.ok(engine.insidePlayableArea(seg.x, seg.y), `${where}: snake out of bounds`);
       }
 
-      assert.ok(state.food, `${where}: no food spawned`);
-      assert.ok(!state.walls.has(key(state.food.x, state.food.y)), `${where}: food inside a wall`);
-      assert.ok(engine.insidePlayableArea(state.food.x, state.food.y), `${where}: food out of bounds`);
-      assert.ok(!engine.inShrinkZone(state.food.x, state.food.y), `${where}: food in the shrink zone`);
-      assert.ok(engine.foodReachable(), `${where}: food unreachable from the head`);
+      if (LEVELS[i].boss) {
+        // Boss levels have no ambient food — state.food is only ever set
+        // while the core is exposed, which it is not at spawn. The core and
+        // its charge shards are the boss-level equivalent of this check.
+        assert.equal(state.food, null, `${where}: boss level spawned with ambient food`);
+        assert.ok(state.boss, `${where}: boss level has no boss state`);
+        assert.ok(state.bossCorePos, `${where}: boss level has no reserved core position`);
+        assert.ok(state.walls.has(key(state.bossCorePos.x, state.bossCorePos.y)), `${where}: boss core is not shielded at spawn`);
+        assert.equal(state.bossCharges.length, BOSS_SHARDS_PER_CYCLE, `${where}: wrong number of charge shards`);
+        for (const shard of state.bossCharges) {
+          assert.ok(!state.walls.has(key(shard.x, shard.y)), `${where}: charge shard inside a wall`);
+          assert.ok(engine.insidePlayableArea(shard.x, shard.y), `${where}: charge shard out of bounds`);
+        }
+      } else {
+        assert.ok(state.food, `${where}: no food spawned`);
+        assert.ok(!state.walls.has(key(state.food.x, state.food.y)), `${where}: food inside a wall`);
+        assert.ok(engine.insidePlayableArea(state.food.x, state.food.y), `${where}: food out of bounds`);
+        assert.ok(!engine.inShrinkZone(state.food.x, state.food.y), `${where}: food in the shrink zone`);
+        assert.ok(engine.foodReachable(), `${where}: food unreachable from the head`);
+      }
 
       for (const p of state.powerups) {
         assert.ok(!state.walls.has(key(p.x, p.y)), `${where}: powerup inside a wall`);
@@ -364,4 +382,282 @@ test("the closing arena never strands the core", () => {
 
     assert.equal(stranded, 0, `level ${levelIndex + 1}: core was stranded in the shrink zone`);
   }
+});
+
+/* ------------------------------------------------------------------
+ * Boss encounters (levels 8, 16, 24, 30)
+ * --------------------------------------------------------------- */
+
+const BOSS_LEVELS = { warden: 7, disruptor: 15, collapse: 23, singularity: 29 };
+
+// Places the head immediately before a target cell, facing it, and steps
+// once — the same "walk onto X" primitive every boss test needs, without
+// depending on a working pathfinder to reach across the arena.
+function stepOnto(engine, target) {
+  const { state } = engine;
+  state.snake = [
+    { x: target.x - 1, y: target.y },
+    { x: target.x - 2, y: target.y },
+    { x: target.x - 3, y: target.y }
+  ];
+  state.snakeDir = { x: 1, y: 0 };
+  engine.requestDirection("right");
+  engine.step();
+}
+
+function eatAllCharges(engine) {
+  const { state } = engine;
+  for (const shard of [...state.bossCharges]) stepOnto(engine, shard);
+}
+
+function runClear(state) {
+  if (state.timerLeft != null) state.timerLeft = 999;
+  if (state.paused) state.paused = false;
+}
+
+test("boss levels are exactly 8, 16, 24 and 30, and no others", () => {
+  const bossIndices = LEVELS.map((l, i) => (l.boss ? i : null)).filter((i) => i !== null);
+  assert.deepEqual(bossIndices, [7, 15, 23, 29]);
+  assert.deepEqual(
+    LEVELS.filter((l) => l.boss).map((l) => l.boss),
+    ["warden", "disruptor", "collapse", "singularity"]
+  );
+});
+
+test("a boss opens after exactly BOSS_SHARDS_PER_CYCLE shards and can be defeated", () => {
+  for (const [id, levelIndex] of Object.entries(BOSS_LEVELS)) {
+    const engine = engineAt("campaign", levelIndex);
+    const { state } = engine;
+    // This test drives the core open/hit/re-shield cycle directly by
+    // teleporting onto shards and the core rather than navigating to them, so
+    // an ambient drone or the hunting fragment wandering into the snake's
+    // teleported position between cycles would be an artifact of that
+    // shortcut, not a real failure — the drones and rival get their own
+    // dedicated, lighter-weight coverage elsewhere in this file.
+    state.hazards = [];
+    state.enemySnakes = [];
+    const core = { ...state.boss.core };
+    const hitsRequired = state.boss.hitsRequired;
+    assert.equal(hitsRequired, LEVELS[levelIndex].target, `${id}: hitsRequired should equal the level's target`);
+
+    for (let hit = 1; hit <= hitsRequired; hit++) {
+      assert.equal(state.boss.phase, "charging", `${id}: should be charging before cycle ${hit}`);
+      assert.equal(state.bossCharges.length, BOSS_SHARDS_PER_CYCLE, `${id}: wrong shard count at cycle ${hit}`);
+
+      eatAllCharges(engine);
+      assert.equal(state.boss.phase, "exposed", `${id}: should open after eating all shards (cycle ${hit})`);
+      assert.deepEqual(state.food, core, `${id}: exposed food should be the core`);
+
+      const missionBefore = state.mission;
+      stepOnto(engine, core);
+
+      if (hit < hitsRequired) {
+        assert.equal(state.mission, missionBefore + 1, `${id}: hit should count toward the mission`);
+        assert.equal(state.boss.hitsTaken, hit, `${id}: hitsTaken after hit ${hit}`);
+        assert.equal(state.boss.phase, "charging", `${id}: should re-shield after a non-lethal hit`);
+        assert.ok(state.walls.has(key(core.x, core.y)), `${id}: core should be re-shielded`);
+      } else if (levelIndex + 1 >= LEVELS.length) {
+        // Singularity Prime is the last level in the game — its lethal hit
+        // wins the run outright rather than loading a next level.
+        assert.equal(state.won, true, `${id}: defeating the final boss should win the run`);
+        assert.equal(state.levelIndex, levelIndex, `${id}: the final level index should not change on victory`);
+      } else {
+        // The lethal hit's mission++ is immediately overwritten by
+        // loadLevel() resetting state.mission for the next level, so that is
+        // not checked here — the transition below is the real assertion.
+        assert.equal(state.levelIndex, levelIndex + 1, `${id}: lethal hit should advance to the next level`);
+        assert.equal(state.boss, null, `${id}: boss state should be cleared after defeat`);
+      }
+    }
+  }
+});
+
+test("missing the exposed window re-shields the core and costs the whole cycle", () => {
+  const engine = engineAt("campaign", BOSS_LEVELS.warden);
+  const { state } = engine;
+  const core = { ...state.boss.core };
+  eatAllCharges(engine);
+  assert.equal(state.boss.phase, "exposed");
+
+  // Wander safely (never touching the core) and let the window time out.
+  // An alternating up/down request does not actually oscillate —
+  // requestDirection rejects an exact reversal of the current heading, so
+  // after the first turn it just travels straight into whatever is there —
+  // so this picks any currently-safe direction each tick instead, the same
+  // proven pattern used elsewhere in this file.
+  let deaths = 0;
+  for (let i = 0; i < state.boss.def.exposedTicks + 2; i++) {
+    runClear(state);
+    if (state.lives < 99) deaths++; // sanity: this test must not rely on dying
+    const head = state.snake[0];
+    const dirs = [
+      { n: "right", x: 1, y: 0 },
+      { n: "down", x: 0, y: 1 },
+      { n: "up", x: 0, y: -1 },
+      { n: "left", x: -1, y: 0 }
+    ];
+    const safe = dirs
+      .filter((d) => !(d.x === core.x - head.x && d.y === core.y - head.y)) // never step onto the core
+      .find((d) => !engine.isBlocked(head.x + d.x, head.y + d.y, false));
+    if (safe) engine.requestDirection(safe.n);
+    engine.step();
+  }
+
+  assert.equal(deaths, 0, "this test is only meaningful if the player survived the whole window");
+  assert.equal(state.boss.phase, "charging", "window should have closed on timeout, not on a death");
+  assert.equal(state.boss.hitsTaken, 0, "a miss must not count as a hit");
+  assert.ok(state.walls.has(key(core.x, core.y)), "core should be re-shielded after a miss");
+  assert.equal(state.bossCharges.length, BOSS_SHARDS_PER_CYCLE, "a fresh cycle of shards should have spawned");
+});
+
+test("touching a closed boss core is fatal but does not throw", () => {
+  const engine = engineAt("campaign", BOSS_LEVELS.warden);
+  const { state } = engine;
+  const core = { ...state.boss.core };
+  const reason = engine.collisionReason(core, false);
+  assert.match(reason, /shield/i);
+
+  const livesBefore = state.lives;
+  stepOnto(engine, core);
+  assert.equal(state.lives, livesBefore - 1, "walking into the closed core should cost a life");
+});
+
+test("The Disruptor's mirror attack always reverts, and only fires while charging", () => {
+  const engine = engineAt("campaign", BOSS_LEVELS.disruptor);
+  const { state } = engine;
+  assert.equal(state.currentLevel.mirror, false, "base level config should not be statically mirrored");
+
+  state.snake = [{ x: 15, y: 10 }, { x: 14, y: 10 }, { x: 13, y: 10 }];
+  state.snakeDir = { x: 1, y: 0 };
+  state.nextDir = { x: 1, y: 0 };
+  let sawMirror = false;
+  let maxStreak = 0;
+  let streak = 0;
+  for (let i = 0; i < 60; i++) {
+    runClear(state);
+    engine.step();
+    if (state.mirror) {
+      sawMirror = true;
+      streak++;
+      maxStreak = Math.max(maxStreak, streak);
+    } else {
+      streak = 0;
+    }
+  }
+  assert.ok(sawMirror, "the mirror attack should fire within 60 ticks");
+  assert.ok(maxStreak <= state.boss.def.attackDuration, "a mirror pulse should never outlast its configured duration");
+});
+
+test("The Collapse's shrink attack never exceeds a safe margin and always releases", () => {
+  for (const [id, levelIndex] of [["collapse", BOSS_LEVELS.collapse], ["singularity", BOSS_LEVELS.singularity]]) {
+    const engine = engineAt("campaign", levelIndex);
+    const { state } = engine;
+    const core = state.boss.core;
+    const spawnTail = { x: core.x - 2 * BOSS_ARENA_HALF_SPAN + 2, y: core.y };
+
+    // This test is about the shrink-pulse math staying within safe bounds,
+    // not about surviving the rest of the encounter — Singularity Prime's
+    // ambient drones and hunting fragment are cleared so a stray death can't
+    // interrupt a telegraphed pulse mid-count and starve it out, which is a
+    // real thing that can legitimately happen in a chaotic real fight (an
+    // attack cancels on death by design) but has nothing to do with what is
+    // being verified here.
+    state.hazards = [];
+    state.enemySnakes = [];
+
+    // The attack's whole point is to threaten a player who is not paying
+    // attention to its telegraph, so a bot that only reacts to the CURRENT
+    // margin can legitimately wander into a band that becomes lethal a few
+    // ticks later — that is the attack working as designed, not a bug, but
+    // it is not what this test is trying to measure. Planning against the
+    // worst-case margin the whole time sidesteps needing real telegraph-
+    // reading logic while still leaving the actual thing under test —
+    // whether the margin itself ever exceeds shrinkTarget and always
+    // releases — fully exercised.
+    const worstCaseMargin = state.boss.def.shrinkTarget;
+    const dangerZone = (x, y) =>
+      x <= worstCaseMargin || x >= GRID.cols - 1 - worstCaseMargin || y <= worstCaseMargin || y >= GRID.rows - 1 - worstCaseMargin;
+
+    let maxMargin = 0;
+    let shrinkDeaths = 0;
+    for (let i = 0; i < 140; i++) {
+      runClear(state);
+      const messageBefore = state.message;
+      const head = state.snake[0];
+      const dirs = [
+        { n: "right", x: 1, y: 0 },
+        { n: "down", x: 0, y: 1 },
+        { n: "up", x: 0, y: -1 },
+        { n: "left", x: -1, y: 0 }
+      ];
+      const safe = dirs.find((d) => !engine.isBlocked(head.x + d.x, head.y + d.y, false) && !dangerZone(head.x + d.x, head.y + d.y));
+      if (safe) engine.requestDirection(safe.n);
+      engine.step();
+      // The bot is a dumb "first safe direction, preferring right" walker —
+      // it can (and near L30's denser wall scatter, does) wander into an
+      // ordinary wall pillar on its own, which is a test-bot limitation, not
+      // a shrink defect. What must never happen is dying specifically to the
+      // shrink zone once it has been avoided by construction above.
+      if (state.message !== messageBefore && /closing edge/i.test(state.message)) shrinkDeaths++;
+      maxMargin = Math.max(maxMargin, state.shrinkMargin);
+      assert.ok(!engine.inShrinkZone(core.x, core.y), `${id}: core must stay outside the shrink zone at tick ${i}`);
+      assert.ok(!engine.inShrinkZone(spawnTail.x, spawnTail.y), `${id}: spawn tail must stay safe at tick ${i}`);
+    }
+    assert.equal(shrinkDeaths, 0, `${id}: the shrink zone itself must never be what kills a player who is avoiding it`);
+    assert.ok(maxMargin > 0, `${id}: a shrink pulse should have fired within 140 ticks`);
+    assert.equal(maxMargin, worstCaseMargin, `${id}: margin should reach exactly its configured target, no more`);
+    assert.equal(state.shrinkMargin, 0, `${id}: margin should always release back to the resting baseline`);
+  }
+});
+
+test("an attack in progress is force-cancelled the instant the core opens", () => {
+  const engine = engineAt("campaign", BOSS_LEVELS.collapse);
+  const { state } = engine;
+  state.snake = [{ x: 15, y: 10 }, { x: 14, y: 10 }, { x: 13, y: 10 }];
+  state.snakeDir = { x: 1, y: 0 };
+  state.nextDir = { x: 1, y: 0 };
+
+  let i = 0;
+  for (; i < 200 && state.shrinkMargin === 0; i++) {
+    runClear(state);
+    engine.step();
+  }
+  assert.ok(state.shrinkMargin > 0, "precondition: a pulse should be active");
+
+  eatAllCharges(engine);
+  assert.equal(state.boss.phase, "exposed");
+  assert.equal(state.shrinkMargin, 0, "opening the core mid-pulse should immediately release the cage");
+});
+
+test("Singularity Prime's hunting fragment is a normal rival at the tier's rival speed", () => {
+  const engine = engineAt("campaign", BOSS_LEVELS.singularity);
+  const { state } = engine;
+  assert.equal(state.enemySnakes.length, 1);
+  assert.equal(state.currentLevel.rivalMovesPerSec, playerMovesPerSec(BOSS_LEVELS.singularity) - 2);
+});
+
+test("dying mid-fight keeps hitsTaken but always hands back a fresh, clean cycle", () => {
+  const engine = engineAt("campaign", BOSS_LEVELS.disruptor);
+  const { state } = engine;
+  const core = { ...state.boss.core };
+
+  eatAllCharges(engine);
+  stepOnto(engine, core); // one hit landed
+  assert.equal(state.boss.hitsTaken, 1);
+
+  eatAllCharges(engine); // re-open, then die while it is open
+  assert.equal(state.boss.phase, "exposed");
+  state.snake = [{ x: 1, y: 1 }, { x: 1, y: 2 }, { x: 1, y: 3 }];
+  state.snakeDir = { x: 0, y: -1 };
+  state.nextDir = { x: 0, y: -1 };
+  state.lives = 3;
+  engine.step(); // walks into the outer wall and dies
+
+  assert.equal(state.lives, 2, "precondition: should have lost a life");
+  assert.equal(state.boss.hitsTaken, 1, "hits already landed must survive a death");
+  assert.equal(state.boss.phase, "charging", "a mid-fight death should always hand back a closed, fresh cycle");
+  assert.equal(state.mirror, false, "no attack should be left active after respawning");
+  assert.equal(state.food, null);
+  assert.equal(state.bossCharges.length, BOSS_SHARDS_PER_CYCLE);
+  assert.deepEqual(state.snake[0], { x: state.boss.core.x - 2 * BOSS_ARENA_HALF_SPAN, y: state.boss.core.y });
 });

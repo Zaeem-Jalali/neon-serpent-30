@@ -11,6 +11,7 @@ import {
   GRID,
   CHECKPOINT_EVERY,
   MAX_LIVES,
+  BOSS_SHARDS_PER_CYCLE,
   tierForLevel,
   playerMovesPerSec,
   rivalMovesPerSec
@@ -54,7 +55,11 @@ const state = Object.assign(engine.state, {
   unlockAll: false,
   // Purely visual, owned here rather than by the engine.
   floating: [],
-  particles: []
+  particles: [],
+  shakeTicks: 0,
+  shakeStrength: 0,
+  flashTicks: 0,
+  flashColor: "#ffffff"
 });
 
 function handleEngineEvent(type, payload) {
@@ -71,6 +76,16 @@ function handleEngineEvent(type, payload) {
     case "clearEffects":
       state.floating.length = 0;
       state.particles.length = 0;
+      break;
+    case "shake":
+      // Additive rather than replaced: a hit landed right as another effect
+      // was fading should feel more emphatic, not reset the punch.
+      state.shakeTicks = Math.max(state.shakeTicks, payload.ticks);
+      state.shakeStrength = Math.max(state.shakeStrength, payload.strength);
+      break;
+    case "flash":
+      state.flashTicks = Math.max(state.flashTicks, payload.ticks);
+      state.flashColor = payload.color;
       break;
     case "ui":
       updateUI();
@@ -373,6 +388,28 @@ function onVictory({ score, levelReached }) {
           [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(f, i * 0.11, 0.24, "square", 0.26));
           this.tone(1568, 0.6, 0.7, "triangle", 0.3);
           break;
+        case "bossCharge":
+          this.tone(740, 0, 0.05, "triangle", 0.2);
+          this.tone(1180, 0.045, 0.07, "triangle", 0.18);
+          break;
+        case "bossPhaseOpen":
+          this.tone(220, 0, 0.32, "sawtooth", 0.2, 880);
+          this.noise(0.04, 0.18, 0.12);
+          break;
+        case "bossAttackWarn":
+          this.tone(600, 0, 0.08, "square", 0.2);
+          this.tone(600, 0.16, 0.08, "square", 0.2);
+          break;
+        case "bossHit":
+          this.noise(0, 0.24, 0.3);
+          this.tone(160, 0, 0.3, "square", 0.32, 60);
+          this.tone(880, 0.02, 0.1, "square", 0.2);
+          break;
+        case "bossDefeated":
+          this.noise(0, 0.4, 0.34);
+          [196, 262, 330, 392, 523, 659].forEach((f, i) => this.tone(f, i * 0.08, 0.3, "square", 0.28));
+          this.tone(1046, 0.5, 0.8, "triangle", 0.32);
+          break;
         case "ui":
           this.tone(440, 0, 0.05, "sine", 0.16);
           break;
@@ -558,6 +595,7 @@ function onVictory({ score, levelReached }) {
     card.disabled = !unlocked;
     if (stat.completed) card.classList.add("is-done");
     if (isNext) card.classList.add("is-next");
+    if (level.boss) card.classList.add("is-boss");
     // Dashed border marks a level only reachable because practice mode is on.
     if (unlocked && !earned) card.classList.add("is-practice");
 
@@ -566,7 +604,7 @@ function onVictory({ score, levelReached }) {
 
     const num = document.createElement("span");
     num.className = "ls-num";
-    num.textContent = `Level ${levelIndex + 1}`;
+    num.textContent = level.boss ? `⛨ Level ${levelIndex + 1}` : `Level ${levelIndex + 1}`;
 
     const badge = document.createElement("span");
     badge.className = "ls-badge";
@@ -604,6 +642,12 @@ function onVictory({ score, levelReached }) {
   // Compact one-line summary of what makes a level distinct.
   function describeLevel(levelIndex) {
     const level = LEVELS[levelIndex];
+    if (level.boss) {
+      const parts = [`${playerMovesPerSec(levelIndex)}/s`, `${level.target} hits`];
+      if (level.enemies) parts.push(`hunting fragment @ ${rivalMovesPerSec(levelIndex)}/s`);
+      if (level.hazards) parts.push(`${level.hazards} drone${level.hazards > 1 ? "s" : ""}`);
+      return parts.join(" · ");
+    }
     const parts = [`${playerMovesPerSec(levelIndex)}/s`];
     if (level.hazards) parts.push(`${level.hazards} drone${level.hazards > 1 ? "s" : ""}`);
     if (level.enemies) {
@@ -978,14 +1022,25 @@ function onVictory({ score, levelReached }) {
       particle.vy += 0.02 * scale;
       return particle.life > 0;
     });
+    if (state.shakeTicks > 0) state.shakeTicks = Math.max(0, state.shakeTicks - scale);
+    if (state.flashTicks > 0) state.flashTicks = Math.max(0, state.flashTicks - scale);
   }
 
   function draw() {
     const w = state.viewWidth;
     const h = state.viewHeight;
     const cell = cellSize();
-    const ox = Math.floor((w - GRID.cols * cell) / 2);
-    const oy = Math.floor((h - GRID.rows * cell) / 2);
+    let ox = Math.floor((w - GRID.cols * cell) / 2);
+    let oy = Math.floor((h - GRID.rows * cell) / 2);
+
+    // A boss hit landing shakes the whole board briefly. Decays with
+    // shakeTicks, so it settles to nothing on its own without needing a
+    // separate cleanup step.
+    if (state.shakeTicks > 0) {
+      const power = state.shakeStrength * (state.shakeTicks / 10);
+      ox += Math.round((Math.random() - 0.5) * power);
+      oy += Math.round((Math.random() - 0.5) * power);
+    }
 
     ctx.clearRect(0, 0, w, h);
     const bg = ctx.createLinearGradient(0, 0, 0, h);
@@ -996,6 +1051,8 @@ function onVictory({ score, levelReached }) {
 
     drawGrid(ox, oy, cell);
     drawWalls(ox, oy, cell);
+    drawBoss(ox, oy, cell);
+    drawBossCharges(ox, oy, cell);
     drawPortals(ox, oy, cell);
     drawHazards(ox, oy, cell);
     drawPowerups(ox, oy, cell);
@@ -1005,6 +1062,14 @@ function onVictory({ score, levelReached }) {
     drawParticles();
     drawFloating(ox, oy, cell);
     drawShrinkMask(ox, oy, cell);
+
+    if (state.flashTicks > 0) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(0.6, state.flashTicks / 6) * 0.6;
+      ctx.fillStyle = state.flashColor;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+    }
 
     if (state.running && !state.paused && !state.over && !state.won) {
       overlay.classList.remove("visible");
@@ -1169,6 +1234,94 @@ function onVictory({ score, levelReached }) {
       ctx.globalAlpha = 1;
     }
     ctx.restore();
+  }
+
+  /* The boss's hitbox is a single grid cell (see reserveBossCore in
+     engine.js) but the sprite spans several cells' worth of pixels — the
+     collision model stays simple while the fight still looks like it is
+     against something enormous. Two counter-rotating rings plus a core
+     whose colour and pulse rate carry the phase: red and slow while
+     shielded, brightening as shards are fed in, mint and fast the instant
+     it cracks open. */
+  function drawBoss(ox, oy, cell) {
+    const boss = state.boss;
+    if (!boss || boss.phase === "defeated") return;
+
+    const cx = ox + boss.core.x * cell + cell / 2;
+    const cy = oy + boss.core.y * cell + cell / 2;
+    const charging = boss.phase === "charging";
+    const chargeProgress = 1 - state.bossCharges.length / BOSS_SHARDS_PER_CYCLE;
+    const attacking = boss.attackActiveTicks > 0;
+    const telegraphing = boss.attackTelegraphTicks > 0;
+
+    const shellColor = charging ? COLORS.hazard : COLORS.food;
+    const ringColor = telegraphing || attacking ? COLORS.slow : shellColor;
+    const pulseSpeed = charging ? 0.05 + chargeProgress * 0.12 : 0.24;
+    const pulse = 1 + Math.sin(state.tick * pulseSpeed) * (charging ? 0.06 : 0.14);
+
+    ctx.save();
+
+    // Outer hex shell, rotating clockwise. Its radius breathes with the
+    // charge cycle so filling the meter reads as the shield straining.
+    const outerRadius = cell * (1.35 + chargeProgress * 0.12) * pulse;
+    ctx.strokeStyle = ringColor;
+    ctx.shadowColor = ringColor;
+    ctx.shadowBlur = telegraphing ? 26 : 16;
+    ctx.lineWidth = Math.max(2, cell * 0.08);
+    tracePolygon(cx, cy, outerRadius, 6, state.tick * 0.025);
+    ctx.stroke();
+
+    // Inner ring, counter-rotating — the "scanline" layer.
+    ctx.globalAlpha = 0.8;
+    ctx.lineWidth = Math.max(1.5, cell * 0.05);
+    tracePolygon(cx, cy, cell * 0.95, 8, -state.tick * 0.045);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // A short arc sweeping around the shell reinforces the "scanning"
+    // read even when nothing else is animating.
+    ctx.beginPath();
+    const sweep = state.tick * 0.08;
+    ctx.arc(cx, cy, cell * 1.15, sweep, sweep + Math.PI * 0.35);
+    ctx.stroke();
+
+    // While the shield is up, its own core marker; drawFood() already draws
+    // the exposed marker (state.food is the core position during that
+    // window), so this only needs to cover the closed state.
+    if (charging) {
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = shellColor;
+      ctx.globalAlpha = 0.55 + chargeProgress * 0.45;
+      ctx.beginPath();
+      ctx.arc(cx, cy, cell * (0.16 + chargeProgress * 0.08) * pulse, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.restore();
+  }
+
+  // Charge shards: a faceted diamond distinct from every other pickup shape
+  // already in use, coloured to match the boss's own palette so their
+  // purpose reads as "feeds the boss fight" rather than a generic bonus.
+  function drawBossCharges(ox, oy, cell) {
+    for (const shard of state.bossCharges) {
+      const px = ox + shard.x * cell + cell / 2;
+      const py = oy + shard.y * cell + cell / 2;
+      const pulse = 1 + Math.sin(state.tick * 0.2 + shard.x) * 0.1;
+      ctx.save();
+      ctx.fillStyle = COLORS.bonus;
+      ctx.strokeStyle = COLORS.bonus;
+      ctx.shadowColor = COLORS.bonus;
+      ctx.shadowBlur = 16;
+      tracePolygon(px, py, cell * 0.26 * pulse, 4, state.tick * 0.03);
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.6;
+      tracePolygon(px, py, cell * 0.4 * pulse, 4, state.tick * 0.03);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   function drawFood(ox, oy, cell) {
@@ -1351,6 +1504,20 @@ function onVictory({ score, levelReached }) {
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
   }
 
+  // Describes whichever half of the boss loop is currently live, so the
+  // mission panel always says something actionable rather than a static
+  // "defeat the boss" the whole fight.
+  function bossMissionLine() {
+    const boss = state.boss;
+    if (!boss) return "";
+    const remaining = boss.hitsRequired - boss.hitsTaken;
+    if (boss.phase === "exposed") {
+      return `CORE EXPOSED — reach it before the shield reforms! (${remaining} hit${remaining === 1 ? "" : "s"} left)`;
+    }
+    const eaten = BOSS_SHARDS_PER_CYCLE - state.bossCharges.length;
+    return `Feed the core ${eaten}/${BOSS_SHARDS_PER_CYCLE} charge shards to crack the shield. ${remaining} hit${remaining === 1 ? "" : "s"} to win.`;
+  }
+
   function updateHUD() {
     levelLabel.textContent = state.levelIndex + 1;
     scoreLabel.textContent = formatNumber(state.score);
@@ -1362,9 +1529,16 @@ function onVictory({ score, levelReached }) {
       challengeCode.textContent = "Campaign mode";
       seedLabel.textContent = "Campaign";
     }
-    const timerValue = state.timerLeft == null ? "No time limit on this stage." : `${Math.ceil(state.timerLeft)}s remaining.`;
+    const timerValue = state.currentLevel?.boss
+      ? "No stage timer — the boss sets the pace."
+      : state.timerLeft == null
+        ? "No time limit on this stage."
+        : `${Math.ceil(state.timerLeft)}s remaining.`;
     timerText.textContent = timerValue;
-    const missionBits = [`Collect ${state.missionGoal} cores to unlock the next level.`];
+
+    const missionBits = state.boss
+      ? [bossMissionLine()]
+      : [`Collect ${state.missionGoal} cores to unlock the next level.`];
     if (state.currentLevel?.mirror) missionBits.push("Left and right are mirrored on this stage — up and down are normal.");
     if (isPracticeRun()) missionBits.push(`Practice run from level ${state.runStartLevel + 1} — not posted.`);
     missionText.textContent = missionBits.join(" ");
@@ -1372,24 +1546,42 @@ function onVictory({ score, levelReached }) {
     missionFill.style.width = `${Math.floor(progress * 100)}%`;
   }
 
+  const BOSS_ATTACK_LABELS = {
+    none: "None — this fight is the tutorial for the loop itself",
+    mirror: "Periodically flips left/right while the shield is up",
+    shrink: "Periodically compresses the cage, then releases it",
+    combo: "Alternates flipped steering and cage compression, plus a hunting fragment"
+  };
+
   function updateLevelPanel() {
     const level = state.currentLevel || LEVELS[0];
     levelName.textContent = level.name;
     levelDesc.textContent = level.desc;
     modifierList.innerHTML = "";
-    const modifiers = [
-      `Tier: ${tierForLevel(state.levelIndex).name}`,
-      `Speed: ${playerMovesPerSec(state.levelIndex)} moves/sec`,
-      `Layout: ${prettyLayout(level.layout)}`,
-      `Drones: ${level.hazards}`,
-      level.enemies
-        ? `Rival snakes: ${level.enemies} at ${rivalMovesPerSec(state.levelIndex)} moves/sec`
-        : "Rival snakes: none",
-      `Portals: ${level.portals}`,
-      level.mirror ? "Mirrored left/right" : "Normal controls",
-      level.timer ? `Timer: ${level.timer}s` : "No stage timer",
-      level.shrink ? `Arena shrinks every ${level.shrink} ticks` : "Stable arena"
-    ];
+
+    const modifiers = level.boss
+      ? [
+          `Tier: ${tierForLevel(state.levelIndex).name}`,
+          `Speed: ${playerMovesPerSec(state.levelIndex)} moves/sec`,
+          `Hits to defeat: ${state.missionGoal}`,
+          `Charge shards per cycle: ${BOSS_SHARDS_PER_CYCLE}`,
+          `Attack: ${BOSS_ATTACK_LABELS[state.boss?.def.attack] || BOSS_ATTACK_LABELS[level.boss] || "—"}`,
+          level.enemies ? `Hunting fragment: 1 at ${rivalMovesPerSec(state.levelIndex)} moves/sec` : "Hunting fragment: none",
+          `Ambient drones: ${level.hazards}`
+        ]
+      : [
+          `Tier: ${tierForLevel(state.levelIndex).name}`,
+          `Speed: ${playerMovesPerSec(state.levelIndex)} moves/sec`,
+          `Layout: ${prettyLayout(level.layout)}`,
+          `Drones: ${level.hazards}`,
+          level.enemies
+            ? `Rival snakes: ${level.enemies} at ${rivalMovesPerSec(state.levelIndex)} moves/sec`
+            : "Rival snakes: none",
+          `Portals: ${level.portals}`,
+          level.mirror ? "Mirrored left/right" : "Normal controls",
+          level.timer ? `Timer: ${level.timer}s` : "No stage timer",
+          level.shrink ? `Arena shrinks every ${level.shrink} ticks` : "Stable arena"
+        ];
     for (const item of modifiers) {
       const li = document.createElement("li");
       li.textContent = item;

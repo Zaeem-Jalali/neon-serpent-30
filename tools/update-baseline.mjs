@@ -50,7 +50,8 @@ function fingerprint(state) {
       stepMs: state.stepMs,
       goal: state.missionGoal,
       timer: state.timerLeft,
-      mirror: state.mirror
+      mirror: state.mirror,
+      bossCharges: (state.bossCharges || []).map((c) => [c.x, c.y])
     })
   );
 }
@@ -59,7 +60,7 @@ const result = {
   _comment:
     "FNV-1a fingerprints of every generated board. Level generation is fully seeded, so these must match exactly after any refactor that claims to preserve behaviour. Regenerate deliberately with tools/update-baseline.mjs when a gameplay change is meant to alter generation.",
   _captured: reason,
-  _fields: "walls, portals, hazards, enemies, powerups, food, snake, stepMs, missionGoal, timer, mirror"
+  _fields: "walls, portals, hazards, enemies, powerups, food, snake, stepMs, missionGoal, timer, mirror, bossCharges"
 };
 
 for (const seed of SEEDS) {

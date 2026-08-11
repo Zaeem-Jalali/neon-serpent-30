@@ -35,7 +35,20 @@
       if (!D.insidePlayableArea(seg.x, seg.y)) issues.push(`${label}: snake spawned out of bounds`);
     }
 
-    if (!state.food) {
+    if (LEVELS[levelIndex].boss) {
+      // Boss levels have no ambient food at spawn — only charge shards and a
+      // shielded core. Checked in place of the food block above.
+      if (state.food) issues.push(`${label}: boss level spawned with ambient food`);
+      if (!state.boss) issues.push(`${label}: boss level has no boss state`);
+      if (!state.bossCorePos) issues.push(`${label}: boss level has no reserved core position`);
+      else if (!walls.has(key(state.bossCorePos.x, state.bossCorePos.y))) {
+        issues.push(`${label}: boss core is not shielded at spawn`);
+      }
+      for (const shard of cellsOf(state.bossCharges)) {
+        if (walls.has(key(shard.x, shard.y))) issues.push(`${label}: charge shard inside a wall`);
+        if (!D.insidePlayableArea(shard.x, shard.y)) issues.push(`${label}: charge shard out of bounds`);
+      }
+    } else if (!state.food) {
       issues.push(`${label}: no food spawned`);
     } else {
       if (!isFinitePoint(state.food)) issues.push(`${label}: food has non-finite coords`);
@@ -76,9 +89,33 @@
   // ---- simulated play -------------------------------------------------
   // Greedy BFS autopilot: walks toward the food, preferring any safe cell when
   // no path exists. Good enough to prove the engine does not throw.
+  // On a boss level, state.food is only ever set while the core is exposed
+  // (see openBossCore in engine.js) — the rest of the time the thing worth
+  // pathing toward is the nearest charge shard. Falls through to the food
+  // path unchanged for every non-boss level and for the exposed window
+  // itself, where state.food already IS the core's position.
+  function currentGoal() {
+    if (state.food) return state.food;
+    if (state.boss && state.bossCharges.length) {
+      const head = state.snake[0];
+      let nearest = state.bossCharges[0];
+      let best = Infinity;
+      for (const shard of state.bossCharges) {
+        const dist = Math.abs(shard.x - head.x) + Math.abs(shard.y - head.y);
+        if (dist < best) {
+          best = dist;
+          nearest = shard;
+        }
+      }
+      return nearest;
+    }
+    return null;
+  }
+
   function planDirection() {
     const head = state.snake[0];
-    if (!head || !state.food) return null;
+    const goalCell = currentGoal();
+    if (!head || !goalCell) return null;
 
     const dirs = [
       { name: "up", x: 0, y: -1 },
@@ -88,7 +125,7 @@
     ];
 
     const start = key(head.x, head.y);
-    const goal = key(state.food.x, state.food.y);
+    const goal = key(goalCell.x, goalCell.y);
     const prev = new Map([[start, null]]);
     const queue = [head];
 

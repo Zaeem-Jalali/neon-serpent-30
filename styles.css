@@ -781,6 +781,20 @@ canvas {
   border-style: dashed;
 }
 
+.ls-card.is-boss {
+  border-color: rgba(255, 93, 118, 0.5);
+  background: linear-gradient(160deg, rgba(255, 93, 118, 0.1), rgba(255, 255, 255, 0.03));
+}
+
+.ls-card.is-boss.is-done {
+  border-color: rgba(99, 255, 149, 0.45);
+  background: linear-gradient(160deg, rgba(99, 255, 149, 0.12), rgba(255, 255, 255, 0.03));
+}
+
+.ls-card.is-boss .ls-num {
+  color: var(--red);
+}
+
 .bg-orb {
   position: fixed;
   z-index: 0;
