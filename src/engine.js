@@ -548,6 +548,16 @@ export function createEngine({ emit = () => {} } = {}) {
       || randomFreeCell(1, avoidPowerups, true, false)
       || randomFreeCell(1, [], true, false)
       || findAnyOpenCell();
+
+    /* Final guarantee. The attempts above use a deliberately conservative
+       flood fill (it treats drones, portals and pickups as walls and ignores
+       portal links), and the last-resort findAnyOpenCell will return an
+       unreachable cell rather than nothing at all. So whatever came back, the
+       core must still be somewhere the player can actually drive to. */
+    if (state.food && !foodReachable()) {
+      const rescued = pickReachableCell();
+      if (rescued) state.food = rescued;
+    }
   }
 
   // Last-ditch scan: every cell that is genuinely legal to stand on, preferring
@@ -701,11 +711,6 @@ export function createEngine({ emit = () => {} } = {}) {
 
     movePowerups();
 
-    // Safety net: the snake's own body (or a moved actor) can seal the core
-    // off. Re-home it rather than let the stage stall out unwinnable.
-    if (state.food && state.levelTick % 20 === 0 && !foodReachable()) {
-      spawnFood();
-    }
 
     if (!slowed || state.levelTick % 2 === 0) {
       moveHazards();
@@ -789,6 +794,17 @@ export function createEngine({ emit = () => {} } = {}) {
       celebrateVictory();
     }
 
+    /* Safety net, run last so it sees the board as the player will: the snake
+       has already moved and possibly eaten. Either of those can seal the core
+       into a pocket that cannot be entered — the body pinches a corridor, or a
+       replacement core lands across a wall. Checking before the move meant a
+       stranded core survived a whole tick before anyone noticed.
+       A flood fill over 600 cells is nothing next to a stage that cannot be
+       finished. */
+    if (state.food && !foodReachable()) {
+      relocateFood();
+    }
+
     emit("ui");
   }
 
@@ -835,13 +851,88 @@ export function createEngine({ emit = () => {} } = {}) {
     state.enemySnakes = state.enemySnakes.filter((enemy) => enemy.body.length > 0);
   }
 
+  /* Can the player still get to the core?
+   *
+   * Only permanent obstacles count: walls, the snake's own body and the closed
+   * border. Drones and rivals are deliberately NOT treated as blockers — they
+   * move on, and counting them would relocate the core every time one happened
+   * to sit in a corridor, which reads as the core teleporting for no reason.
+   *
+   * Portals are counted as connections, so a pocket served only by a portal is
+   * correctly considered reachable. */
   function foodReachable() {
     if (!state.food) return true;
+    const reachable = reachableCellsFromHead();
+    return reachable === null || reachable.has(key(state.food.x, state.food.y));
+  }
+
+  function reachableCellsFromHead() {
+    const head = state.snake[0];
+    if (!head) return null;
+
     const blocked = new Set(state.walls);
     for (const segment of state.snake.slice(1)) blocked.add(key(segment.x, segment.y));
-    for (const hazard of state.hazards) blocked.add(key(hazard.x, hazard.y));
-    const reachable = getReachableCells(Math.max(1, state.shrinkMargin + 1), blocked);
-    return reachable.has(key(state.food.x, state.food.y));
+
+    const links = new Map();
+    for (const portal of state.portals) {
+      links.set(key(portal.a.x, portal.a.y), portal.b);
+      links.set(key(portal.b.x, portal.b.y), portal.a);
+    }
+
+    const seen = new Set([key(head.x, head.y)]);
+    const queue = [head];
+    const dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
+
+    const visit = (cell) => {
+      const tileKey = key(cell.x, cell.y);
+      if (seen.has(tileKey) || blocked.has(tileKey)) return;
+      if (!insidePlayableArea(cell.x, cell.y)) return;
+      if (inShrinkZone(cell.x, cell.y)) return;
+      seen.add(tileKey);
+      queue.push(cell);
+      const twin = links.get(tileKey);
+      if (twin) visit(twin);
+    };
+
+    while (queue.length) {
+      const current = queue.shift();
+      for (const dir of dirs) visit({ x: current.x + dir.x, y: current.y + dir.y });
+    }
+
+    return seen;
+  }
+
+  // A legal, currently-reachable cell, or null if the snake is boxed in.
+  function pickReachableCell() {
+    const reachable = reachableCellsFromHead();
+    if (!reachable) return null;
+    const occupied = new Set(state.snake.map((s) => key(s.x, s.y)));
+    const pool = [];
+    for (const tileKey of reachable) {
+      if (occupied.has(tileKey)) continue;
+      const [x, y] = tileKey.split(":").map(Number);
+      if (isBlocked(x, y, true)) continue;
+      pool.push({ x, y });
+    }
+    if (!pool.length) return null;
+    return pool[Math.floor(state.rng() * pool.length)];
+  }
+
+  /* Moves a stranded core somewhere the player can actually get to. Announced
+     so it does not look like the core randomly teleported. */
+  function relocateFood() {
+    const previous = state.food;
+    spawnFood();
+    if (state.food && previous && (state.food.x !== previous.x || state.food.y !== previous.y)) {
+      emit("burst", { x: state.food.x, y: state.food.y, color: "food" });
+      emit("floating", {
+        text: "Core moved",
+        x: state.food.x,
+        y: state.food.y,
+        color: "food",
+        life: 30
+      });
+    }
   }
 
   function movePowerups() {
@@ -1175,6 +1266,17 @@ export function createEngine({ emit = () => {} } = {}) {
     state.accumulator = 0;
     emit("clearEffects");
     clearSpawnArea();
+
+    /* Re-validate the core against the new spawn position. Respawning moves
+       the snake right across the board, so a core that was reachable from
+       wherever it died may be sealed off from the centre — and if the player
+       died *because* they were boxed in, the core was very likely relocated
+       into that same pocket moments earlier. Without this the stage can come
+       back unwinnable. */
+    if (state.food && !foodReachable()) {
+      relocateFood();
+    }
+
     // Brief invulnerability, otherwise a drone or rival parked on the spawn
     // point kills the player again the instant they come back.
     state.graceTicks = 14;

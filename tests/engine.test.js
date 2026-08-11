@@ -242,6 +242,89 @@ test("a simulated run never throws and reports events", () => {
   }
 });
 
+test("the board never partitions the core away from the player", () => {
+  /* Distinct from "the core spawned somewhere legal". This plays each level
+     out and asks, every single tick, whether the core is still reachable —
+     walls, the snake's own body and the closing arena all considered, with
+     portals counted as connections.
+   *
+   * A snake that has driven into a dead end is NOT a level defect: you are
+   * allowed to trap yourself. Those are separated out by region size, since a
+   * boxed-in snake can reach almost nothing regardless of where the core is. */
+  const SELF_TRAP_CELLS = 25;
+  const partitions = [];
+
+  const reach = (engine) => {
+    const { state } = engine;
+    const head = state.snake[0];
+    const blocked = new Set(state.walls);
+    for (const seg of state.snake.slice(1)) blocked.add(key(seg.x, seg.y));
+
+    const links = new Map();
+    for (const p of state.portals) {
+      links.set(key(p.a.x, p.a.y), p.b);
+      links.set(key(p.b.x, p.b.y), p.a);
+    }
+
+    const seen = new Set([key(head.x, head.y)]);
+    const queue = [head];
+    const visit = (c) => {
+      const k = key(c.x, c.y);
+      if (seen.has(k) || blocked.has(k)) return;
+      if (!engine.insidePlayableArea(c.x, c.y)) return;
+      if (engine.inShrinkZone(c.x, c.y)) return;
+      seen.add(k);
+      queue.push(c);
+      const twin = links.get(k);
+      if (twin) visit(twin);
+    };
+    while (queue.length) {
+      const cur = queue.shift();
+      for (const d of [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }]) {
+        visit({ x: cur.x + d.x, y: cur.y + d.y });
+      }
+    }
+    return seen;
+  };
+
+  for (const seed of ["campaign", "daily-2026-08-09"]) {
+    for (let i = 0; i < LEVELS.length; i++) {
+      const engine = engineAt(seed, i);
+      const { state } = engine;
+
+      for (let tick = 0; tick < 300; tick++) {
+        if (state.timerLeft != null) state.timerLeft = 999;
+        if (state.paused) state.paused = false;
+
+        const head = state.snake[0];
+        const dirs = [
+          { n: "right", x: 1, y: 0 },
+          { n: "down", x: 0, y: 1 },
+          { n: "up", x: 0, y: -1 },
+          { n: "left", x: -1, y: 0 }
+        ];
+        const safe = dirs.find((d) => !engine.isBlocked(head.x + d.x, head.y + d.y, false));
+        if (safe) {
+          engine.requestDirection(
+            state.mirror ? { left: "right", right: "left" }[safe.n] || safe.n : safe.n
+          );
+        }
+        engine.step();
+        if (state.over || state.won) break;
+        if (!state.food) continue;
+
+        const seen = reach(engine);
+        const stranded = !seen.has(key(state.food.x, state.food.y));
+        if (stranded && seen.size > SELF_TRAP_CELLS) {
+          partitions.push(`${seed} L${i + 1} tick ${tick} (head could reach ${seen.size} cells)`);
+        }
+      }
+    }
+  }
+
+  assert.deepEqual(partitions, [], "core was sealed off from a player who was not trapped");
+});
+
 test("the closing arena never strands the core", () => {
   // Data Dunes onwards shrink; the edge used to swallow the food and make the
   // stage unwinnable.
