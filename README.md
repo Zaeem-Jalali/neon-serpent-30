@@ -83,10 +83,10 @@ rather than from a tempo that creeps up level by level.
 | --- | --- | --- | --- |
 | Easy | 1–8 | 4 moves/sec | Simple layouts, then the first drone and portal pair |
 | Hard | 9–16 | 5 moves/sec | Portals, stage timers, drone pairs, one mirrored stage |
-| Super Hard | 17–24 | 6 moves/sec | Drone packs, tight countdowns, closing arena from 21 |
-| Hard Pro Max | 25–30 | 7 moves/sec | Rival snakes, spiral and fortress mazes, minimal margin |
+| Extreme | 17–24 | 6 moves/sec | Drone packs, tight countdowns, closing arena from 21 |
+| Nightmare | 25–30 | 7 moves/sec | A rival snake, spiral and fortress mazes, minimal margin |
 
-**Rival snakes appear only in Hard Pro Max**, and always move
+**The rival snake appears only in Nightmare**, and always moves
 `RIVAL_SPEED_DELTA` (2) steps per second slower than the player — 5/sec against
 your 7/sec. They run on their own accumulator rather than one move per player
 step, so the gap holds exactly regardless of tier speed.

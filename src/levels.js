@@ -46,7 +46,7 @@ export const LEVELS = [
   { name: "Signal Rift", desc: "Mirrored routes and a stricter clock.", target: 7, layout: "mirror", walls: 14, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 70, mirror: false, shrink: 0 },
   { name: "Byte Barrage", desc: "The board starts to feel crowded on purpose.", target: 7, layout: "maze", walls: 16, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 68, mirror: false, shrink: 0 },
 
-  /* --- Super Hard (6 moves/sec) ---
+  /* --- Extreme (6 moves/sec) ---
      Rebalanced: wall counts roughly halved, drone counts cut, timers loosened
      and the shrink slowed. The old numbers left several boards under 120
      reachable cells before the arena even started closing. */
@@ -59,7 +59,7 @@ export const LEVELS = [
   { name: "Omega Orbit", desc: "Ring barriers, a double portal set, and steady timing.", target: 7, layout: "rings", walls: 14, hazards: 3, enemies: 0, portals: 2, powerups: 1, timer: 66, mirror: false, shrink: 86 },
   { name: "Hyper Hive", desc: "A cross maze that closes in from every side.", target: 7, layout: "cross", walls: 14, hazards: 3, enemies: 0, portals: 2, powerups: 1, timer: 64, mirror: false, shrink: 84 },
 
-  /* --- Hard Pro Max (7 moves/sec, one rival snake) ---
+  /* --- Nightmare (7 moves/sec, one rival snake) ---
      The pressure here should come from speed and the single hunter, not from
      burying the board in walls and drones. */
   { name: "Synth Spiral", desc: "A rival snake arrives. It moves slower than you — use that.", target: 7, layout: "spiral", walls: 14, hazards: 3, enemies: 1, portals: 2, powerups: 1, timer: 62, mirror: false, shrink: 94 },
@@ -93,7 +93,7 @@ export const TIERS = [
   },
   {
     id: "super",
-    name: "Super Hard",
+    name: "Extreme",
     from: 16,
     to: 23,
     movesPerSec: 6,
@@ -101,7 +101,7 @@ export const TIERS = [
   },
   {
     id: "promax",
-    name: "Hard Pro Max",
+    name: "Nightmare",
     from: 24,
     to: 29,
     movesPerSec: 7,
