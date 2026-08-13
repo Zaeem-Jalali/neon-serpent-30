@@ -18,7 +18,15 @@
     # service worker is registered from sw-register.js rather than inline.
     # img-src allows data: only so future inline SVG/data-URI art does not
     # require a policy change; nothing currently relies on it.
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'"
+    #
+    # script-src/connect-src carry two extra hosts for the optional Supabase
+    # integration (see src/supabaseClient.js): esm.sh serves the SDK itself
+    # (only fetched when SUPABASE_URL/ANON_KEY are actually set — see
+    # src/supabaseConfig.js), and *.supabase.co is the project's own REST,
+    # Auth and Realtime (wss) API. Both are inert with an unconfigured
+    # project; there is no per-project host to pin here since the project
+    # ref is only known once a real project exists.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://esm.sh; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; font-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     X-Frame-Options = "DENY"

@@ -226,13 +226,15 @@ async function handlePostScore(req, res) {
 
 /* Kept in sync with netlify.toml. The local server is the only place these can
    be exercised before deploying, so they live here too rather than only in
-   host config. */
+   host config. esm.sh and *.supabase.co are for the optional Supabase
+   integration (see src/supabaseClient.js) — see netlify.toml for the full
+   rationale. */
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  "script-src 'self' https://esm.sh",
   "style-src 'self'",
   "img-src 'self' data:",
-  "connect-src 'self'",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
   "font-src 'self'",
   "manifest-src 'self'",
   "worker-src 'self'",
