@@ -52,10 +52,23 @@
       <p class="eyebrow welcome-eyebrow">Playable challenge ladder</p>
       <h1 class="welcome-title">Neon Serpent<span class="welcome-30">30</span></h1>
       <p id="welcomeGreeting" class="welcome-greeting">Booting the grid&hellip;</p>
-      <button id="enterBtn" class="btn-hero">
+
+      <label id="consentRow" class="consent-row" for="consentCheck">
+        <input type="checkbox" id="consentCheck" />
+        <span>I agree to the <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> and <a href="terms.html" target="_blank" rel="noopener">Terms of Use</a>.</span>
+      </label>
+
+      <button id="enterBtn" class="btn-hero" disabled>
         <span>Enter the Grid</span>
       </button>
       <p class="welcome-foot">30 levels &middot; 4 tiers &middot; 4 bosses &middot; one daily seed for everyone</p>
+
+      <p class="dev-credit" aria-label="Developed by Zaeem Jalali">
+        <span class="dev-credit-label">Developed by</span>
+        <span class="dev-credit-name">
+          <span aria-hidden="true">Z</span><span aria-hidden="true">a</span><span aria-hidden="true">e</span><span aria-hidden="true">e</span><span aria-hidden="true">m</span><span aria-hidden="true">&nbsp;</span><span aria-hidden="true">J</span><span aria-hidden="true">a</span><span aria-hidden="true">l</span><span aria-hidden="true">a</span><span aria-hidden="true">l</span><span aria-hidden="true">i</span>
+        </span>
+      </p>
     </div>
   </section>
 
@@ -112,23 +125,13 @@
     </header>
 
     <div class="stage">
-      <div class="canvas-shell">
-        <canvas id="gameCanvas" width="960" height="640" aria-label="Snake game board"></canvas>
-        <div id="overlay" class="overlay visible">
-          <div class="overlay-card">
-            <p class="overlay-kicker">Tap to start</p>
-            <h2 id="overlayTitle">Outsmart the grid</h2>
-            <p id="overlayText">Collect neon cores, dodge drones, survive portals, and clear all 30 levels. Arrow keys, WASD, swipe, or the on-screen pad all work.</p>
-            <div class="overlay-actions">
-              <button id="playBtn" class="primary">Start Game</button>
-              <button id="checkpointBtn" class="secondary is-hidden">Resume at checkpoint</button>
-              <button id="overlayLevelsBtn" class="secondary">Choose level</button>
-              <button id="dailyCopyBtn" class="secondary">Copy Daily Code</button>
-              <button id="shareBtn" class="secondary">Share</button>
-            </div>
-          </div>
+      <div class="board-wrap">
+        <div class="canvas-shell">
+          <canvas id="gameCanvas" width="960" height="640" aria-label="Snake game board"></canvas>
         </div>
       </div>
+
+      <p id="missionTicker" class="mission-ticker">Collect 3 cores to unlock the next level.</p>
 
       <div class="touch-controls">
         <div></div>
@@ -138,9 +141,29 @@
         <button data-dir="down" class="pad-btn" aria-label="Move down">&#9679;</button>
         <button data-dir="right" class="pad-btn" aria-label="Move right">&#9654;</button>
       </div>
-      <p id="missionTicker" class="mission-ticker">Collect 3 cores to unlock the next level.</p>
     </div>
   </section>
+
+  <!-- Game dialog (start / life lost / game over / victory).
+       Deliberately a sibling of the screens rather than a child of
+       .canvas-shell: that box is clipped (overflow:hidden) and locked to a
+       15:10 ratio, so on a phone it is ~360px tall and was slicing the
+       buttons clean off this card. -->
+  <div id="overlay" class="overlay visible">
+    <div class="overlay-card">
+      <button id="overlayCloseBtn" class="overlay-close" aria-label="Close">&times;</button>
+      <p class="overlay-kicker">Tap to start</p>
+      <h2 id="overlayTitle">Outsmart the grid</h2>
+      <p id="overlayText">Collect neon cores, dodge drones, survive portals, and clear all 30 levels. Arrow keys, WASD, swipe, or the on-screen pad all work.</p>
+      <div class="overlay-actions">
+        <button id="playBtn" class="primary">Start Game</button>
+        <button id="checkpointBtn" class="secondary is-hidden">Resume at checkpoint</button>
+        <button id="overlayLevelsBtn" class="secondary">Choose level</button>
+        <button id="dailyCopyBtn" class="secondary">Copy Daily Code</button>
+        <button id="shareBtn" class="secondary">Share</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ============================ DRAWER ============================= -->
   <div id="navScrim" class="nav-scrim"></div>
@@ -266,6 +289,12 @@
           <h3>Audio &amp; Display</h3>
           <button id="soundBtn" class="secondary full" aria-pressed="true" title="Toggle sound (M)">Sound on</button>
           <button id="fullscreenBtn2" class="secondary full">Toggle fullscreen</button>
+        </section>
+
+        <section class="d-card">
+          <h3>Session</h3>
+          <button id="exitGameBtn" class="secondary full">Exit to home screen</button>
+          <p class="mini-note">Ends the current run and returns to the welcome screen. Your progress and best scores are already saved.</p>
         </section>
 
         <section class="d-card">

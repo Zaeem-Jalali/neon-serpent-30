@@ -10,6 +10,36 @@ const port = process.env.PORT ? Number(process.env.PORT) : 4173;
 const dataDir = path.join(root, "data");
 const scoresFile = path.join(dataDir, "scores.json");
 
+/* Per-IP request throttling.
+ *
+ * This server binds to 127.0.0.1 and is documented as local-development
+ * only, so it is not exposed to the internet — but "not exposed today" is a
+ * deployment assumption, not a property of the code, and an unbounded
+ * write endpoint is worth closing regardless. The map is pruned on every
+ * sweep so it cannot itself become a memory-growth vector.
+ */
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_WRITES = 20;
+const RATE_LIMIT_MAX_READS = 120;
+const rateBuckets = new Map();
+
+function rateLimited(ip, limit) {
+  const now = Date.now();
+  const cutoff = now - RATE_LIMIT_WINDOW_MS;
+
+  for (const [key, stamps] of rateBuckets) {
+    const kept = stamps.filter((t) => t > cutoff);
+    if (kept.length) rateBuckets.set(key, kept);
+    else rateBuckets.delete(key);
+  }
+
+  const stamps = rateBuckets.get(ip) || [];
+  if (stamps.length >= limit) return true;
+  stamps.push(now);
+  rateBuckets.set(ip, stamps);
+  return false;
+}
+
 const MAX_BODY_BYTES = 4 * 1024;
 const MAX_ENTRIES_PER_BOARD = 50;
 const MAX_LEVEL = 30;
@@ -303,11 +333,21 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
 
   if (url.pathname === "/api/scores") {
+    const ip = req.socket.remoteAddress || "unknown";
     if (req.method === "GET") {
+      if (rateLimited(`r:${ip}`, RATE_LIMIT_MAX_READS)) {
+        sendJson(res, 429, { error: "Too many requests. Slow down." });
+        return;
+      }
       handleGetScores(res, url).catch(() => sendJson(res, 500, { error: "Server error." }));
       return;
     }
     if (req.method === "POST") {
+      if (rateLimited(`w:${ip}`, RATE_LIMIT_MAX_WRITES)) {
+        sendJson(res, 429, { error: "Too many submissions. Slow down." });
+        req.resume();
+        return;
+      }
       handlePostScore(req, res).catch(() => sendJson(res, 500, { error: "Server error." }));
       return;
     }

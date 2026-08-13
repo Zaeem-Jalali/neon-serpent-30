@@ -102,6 +102,76 @@ create policy "users insert their own runs"
 create index if not exists runs_leaderboard_idx on public.runs (mode, seed, score desc);
 create index if not exists runs_user_idx on public.runs (user_id, created_at desc);
 
+/* Server-side rate limit on run submissions.
+ *
+ * RLS decides WHO may write a row; it says nothing about HOW OFTEN. Without
+ * this, an authenticated client — including a guest account anyone can mint
+ * for free — could insert rows in a loop, inflate the leaderboard and burn
+ * through the project's database quota. Enforced in the database rather
+ * than the client because anything enforced only in the client is a
+ * suggestion.
+ *
+ * A real run takes minutes; the honest client posts once when a run ends.
+ * 10 per minute leaves enormous headroom for legitimate play (including
+ * fast restarts on early levels) while capping abuse at a level that cannot
+ * meaningfully cost anything.
+ */
+create or replace function public.enforce_run_rate_limit()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  recent_count integer;
+begin
+  select count(*) into recent_count
+  from public.runs
+  where user_id = new.user_id
+    and created_at > now() - interval '1 minute';
+
+  if recent_count >= 10 then
+    raise exception 'Rate limit exceeded: too many runs submitted. Please wait a moment.'
+      using errcode = 'check_violation';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists runs_rate_limit on public.runs;
+create trigger runs_rate_limit
+  before insert on public.runs
+  for each row execute function public.enforce_run_rate_limit();
+
+/* Same reasoning for profile renames: the display name is the one piece of
+   user-controlled text other players see, so it is worth stopping anyone
+   cycling it rapidly. Needs its own timestamp — created_at never changes,
+   so it cannot measure the gap between two renames. */
+alter table public.profiles
+  add column if not exists updated_at timestamptz not null default now();
+
+create or replace function public.enforce_profile_update_limit()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if new.display_name is distinct from old.display_name then
+    if old.updated_at > now() - interval '5 seconds' then
+      raise exception 'Please wait a few seconds before changing your display name again.'
+        using errcode = 'check_violation';
+    end if;
+    new.updated_at := now();
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_rename_limit on public.profiles;
+create trigger profiles_rename_limit
+  before update on public.profiles
+  for each row execute function public.enforce_profile_update_limit();
+
 -- One best run per player per board, newest run wins any score tie. Views
 -- default to running as their owner, which would bypass the RLS on `runs`
 -- and `profiles` above — security_invoker makes it run as the querying user

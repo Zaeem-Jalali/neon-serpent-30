@@ -283,6 +283,145 @@ h3 {
   letter-spacing: 0.04em;
 }
 
+/* Consent gate. Nothing is stored and no account flow starts until this is
+   ticked, so the agreement is genuine rather than implied by use. */
+.consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(400px, 100%);
+  margin: 0 auto 22px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.consent-row:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.consent-row.is-checked {
+  border-color: rgba(99, 255, 149, 0.42);
+  background: rgba(99, 255, 149, 0.08);
+}
+
+.consent-row input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  margin-top: 1px;
+  accent-color: var(--mint);
+  cursor: pointer;
+}
+
+.consent-row a {
+  color: var(--cyan);
+}
+
+/* Nudges the checkbox when someone tries to enter without agreeing, so the
+   disabled button is not a dead end with no explanation. */
+.consent-row.nudge {
+  animation: consentNudge 0.4s ease;
+}
+
+@keyframes consentNudge {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+.btn-hero:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-hero:disabled::after {
+  animation: none;
+}
+
+/* Developer credit. Letters fade up in sequence on load, then the whole
+   name keeps a slow shimmer so it reads as part of the neon styling
+   rather than a static footer line. */
+.dev-credit {
+  margin: 30px 0 0;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+}
+
+.dev-credit-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+}
+
+.dev-credit-name {
+  display: inline-block;
+  font-family: "Trebuchet MS", "Bahnschrift", sans-serif;
+  font-size: 1.06rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.dev-credit-name span {
+  display: inline-block;
+  background: linear-gradient(120deg, var(--cyan), var(--mint), var(--cyan));
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  opacity: 0;
+  animation:
+    devLetterIn 0.5s ease forwards,
+    devShimmer 4.5s linear infinite;
+}
+
+.dev-credit-name span:nth-child(1)  { animation-delay: 0.30s, 1.2s; }
+.dev-credit-name span:nth-child(2)  { animation-delay: 0.36s, 1.2s; }
+.dev-credit-name span:nth-child(3)  { animation-delay: 0.42s, 1.2s; }
+.dev-credit-name span:nth-child(4)  { animation-delay: 0.48s, 1.2s; }
+.dev-credit-name span:nth-child(5)  { animation-delay: 0.54s, 1.2s; }
+.dev-credit-name span:nth-child(6)  { animation-delay: 0.60s, 1.2s; }
+.dev-credit-name span:nth-child(7)  { animation-delay: 0.66s, 1.2s; }
+.dev-credit-name span:nth-child(8)  { animation-delay: 0.72s, 1.2s; }
+.dev-credit-name span:nth-child(9)  { animation-delay: 0.78s, 1.2s; }
+.dev-credit-name span:nth-child(10) { animation-delay: 0.84s, 1.2s; }
+.dev-credit-name span:nth-child(11) { animation-delay: 0.90s, 1.2s; }
+.dev-credit-name span:nth-child(12) { animation-delay: 0.96s, 1.2s; }
+
+@keyframes devLetterIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes devShimmer {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dev-credit-name span {
+    opacity: 1;
+    animation: none;
+    background: none;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
+    color: var(--cyan);
+  }
+  .consent-row.nudge { animation: none; }
+}
+
 /* ---------------------------------------------------------------------
  * Auth screen
  * ------------------------------------------------------------------ */
@@ -570,16 +709,34 @@ h3 {
   border-color: rgba(255, 93, 118, 0.3);
 }
 
-/* The board sizes itself to whatever space the bar and pad leave over,
-   capped by the 3:2 grid aspect so it never distorts. min-height:0 on the
-   flex parents is what actually lets it shrink on short screens instead of
-   overflowing them. */
+/* The board fills whatever space the bar, ticker and pad leave over.
+ *
+ * The previous version pinned a 15:10 box and capped it with a viewport
+ * calculation, which under-used the space badly — on a landscape phone the
+ * board came out around a quarter of the screen. The renderer already
+ * centres the 30x20 grid inside whatever box it is given (see cellSize and
+ * the ox/oy offsets in draw), so letting this box simply fill the available
+ * area produces a correctly proportioned board at the largest size that
+ * fits, in either orientation, with no CSS ratio arithmetic to get wrong.
+ */
+.board-wrap {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .canvas-shell {
   position: relative;
   width: 100%;
-  max-width: min(100%, calc((100vh - 210px) * 1.5));
-  max-width: min(100%, calc((100dvh - 210px) * 1.5));
+  /* Hug the 30x20 grid's own 3:2 shape so the frame does not sit around a
+     lot of dead space, but let max-height clamp it on short screens — the
+     renderer centres the board inside whatever box it gets, so a clamped
+     box letterboxes correctly rather than distorting. */
   aspect-ratio: 15 / 10;
+  max-height: 100%;
   border-radius: 22px;
   overflow: hidden;
   background:
@@ -600,33 +757,81 @@ canvas {
   user-select: none;
 }
 
+/* A viewport-level dialog, not a box inside the board.
+ *
+ * This used to live inside .canvas-shell, which is clipped (overflow:hidden)
+ * and locked to a 15:10 ratio — about 360px tall on a phone. The card needs
+ * well over 400px for its five buttons, so the buttons were being sliced off
+ * entirely and there was no way to reach Resume, Share or Copy Daily Code.
+ * Anchored to the viewport instead, it can always show its full contents,
+ * and scrolls internally on very short screens rather than clipping.
+ */
 .overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  /* Above the sticky d-pad (z-index 5, see the tablet/mobile media query)
-     so its buttons are never trapped underneath the pad on small screens. */
-  z-index: 6;
-  display: grid;
+  z-index: 25;
+  display: none;
   place-items: center;
-  padding: 18px;
-  background: linear-gradient(180deg, rgba(5, 10, 19, 0.36), rgba(5, 10, 19, 0.82));
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: rgba(4, 9, 17, 0.72);
+  backdrop-filter: blur(7px);
   opacity: 0;
-  pointer-events: none;
   transition: opacity 0.22s ease;
 }
 
-.overlay.visible {
+/* Only ever shown over the game itself — the same element would otherwise
+   sit on top of the welcome and sign-in screens, which start with it
+   already carrying the `visible` class. */
+body[data-screen="game"] .overlay.visible {
+  display: grid;
   opacity: 1;
   pointer-events: auto;
 }
 
 .overlay-card {
-  width: min(520px, 100%);
-  padding: 26px;
+  position: relative;
+  width: min(480px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 26px 24px 24px;
   border-radius: 26px;
-  background: linear-gradient(180deg, rgba(9, 16, 30, 0.96), rgba(15, 26, 45, 0.84));
-  border: 1px solid rgba(87, 248, 255, 0.16);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  background: linear-gradient(180deg, rgba(11, 20, 36, 0.98), rgba(16, 28, 48, 0.96));
+  border: 1px solid rgba(87, 248, 255, 0.22);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  animation: cardIn 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-card { animation: none; }
+}
+
+.overlay-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 1.3rem;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.overlay-close:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .overlay-kicker {
@@ -639,7 +844,11 @@ canvas {
 
 .overlay-card h2 {
   margin: 0;
-  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  /* Was clamp(1.8rem, 4vw, 2.8rem), which wrapped "Outsmart the grid" onto
+     two lines on a phone and pushed the buttons further down a card that
+     was already being clipped. */
+  font-size: clamp(1.5rem, 5vw, 2.1rem);
+  line-height: 1.15;
 }
 
 .overlay-card p {
@@ -679,15 +888,16 @@ canvas {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 9px;
-  width: min(232px, 72vw);
+  width: min(232px, 70vw);
   margin: 0 auto;
   flex: none;
   transition: opacity 0.2s ease;
 }
 
-/* Nothing to steer while the start/pause/game-over card is up, and the pad
-   showing through it just muddies the screen. */
-.stage:has(.overlay.visible) .touch-controls {
+/* Nothing to steer while the dialog is up, and the pad showing through it
+   just muddies the screen. The dialog is a viewport-level sibling now, so
+   this keys off the body rather than the stage. */
+body:has(.overlay.visible) .touch-controls {
   opacity: 0;
   pointer-events: none;
 }
@@ -711,8 +921,10 @@ canvas {
 }
 
 /* A keyboard-and-mouse player never needs the pad; hiding it there buys the
-   board more height. Any touch device keeps it. */
-@media (hover: hover) and (pointer: fine) {
+   board more height. The min-width guard matters: some phones and emulators
+   report a fine pointer, and without it the pad vanished on a 844x390
+   landscape phone, leaving no touch controls at all. */
+@media (hover: hover) and (pointer: fine) and (min-width: 1024px) {
   .touch-controls { display: none; }
 }
 
@@ -1510,34 +1722,86 @@ canvas {
  * rules do. Requested on the game screen specifically rather than <body>
  * so the drawer and dialog (both fixed, both outside it) keep working.
  * ------------------------------------------------------------------ */
-#gameScreen:fullscreen {
+#gameScreen:fullscreen,
+#gameScreen:-webkit-full-screen {
   background: linear-gradient(160deg, #050a12, #091a2a 48%, #050b12);
 }
 
-#gameScreen:fullscreen .canvas-shell {
-  max-width: min(100%, calc((100vh - 190px) * 1.5));
+/* In fullscreen there is no browser chrome to leave room for, so the bar
+   tightens and the board takes what it gains. The board itself needs no
+   rule here: .board-wrap simply fills whatever is left. */
+#gameScreen:fullscreen .game-bar {
+  padding-top: 8px;
 }
 
-/* Portrait phones get the most out of fullscreen, which is exactly the
-   "play vertically with ease" case: no browser chrome, so the board can
-   take the height the URL bar was using. */
-@media (orientation: portrait) and (max-width: 820px) {
-  .canvas-shell {
-    max-width: min(100%, calc((100dvh - 250px) * 1.5));
-  }
+#gameScreen:fullscreen .stage {
+  padding-bottom: 10px;
 }
 
 /* Short viewports (landscape phones): trim the chrome so the board still
    gets a usable share of the height. */
 @media (max-height: 560px) {
-  .game-bar { padding: 6px 10px; }
-  .icon-btn { width: 36px; height: 36px; }
+  .game-bar { padding: 5px 10px; }
+  .icon-btn { width: 34px; height: 34px; }
   .hud-cell { padding: 2px 9px; }
-  .hud-cell strong { font-size: 0.9rem; }
-  .stage { padding: 8px; gap: 6px; }
-  .pad-btn { min-height: 42px; }
-  .touch-controls { width: min(190px, 60vw); gap: 7px; }
+  .hud-cell strong { font-size: 0.88rem; }
+  .hud-cell span { font-size: 0.54rem; }
+  .stage { padding: 6px 8px; gap: 5px; }
+  .pad-btn { min-height: 38px; font-size: 0.9rem; }
+  .touch-controls { width: min(168px, 34vw); gap: 5px; }
   .mission-ticker { display: none; }
+}
+
+/* Portrait phones: the board is limited by WIDTH here — a 30x20 grid is a
+   3:2 landscape shape, so no amount of extra height makes it bigger. Rather
+   than leave that height empty, it goes to the pad: bigger targets, sitting
+   low where a thumb actually reaches on a phone held vertically. */
+@media (orientation: portrait) and (max-width: 820px) {
+  .touch-controls {
+    width: min(300px, 84vw);
+    gap: 12px;
+    margin-bottom: 4px;
+  }
+
+  .pad-btn {
+    min-height: 74px;
+    font-size: 1.3rem;
+  }
+}
+
+/* Landscape phones: the pad sits beside the board rather than under it, so
+   it costs no board height at all and lands under the thumbs. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .stage {
+    flex-direction: row;
+    /* stretch, not center: the board box below sizes itself from its
+       parent's height, and a centred flex child has an auto height, which
+       leaves max-height:100% with nothing to resolve against. That is what
+       let the board overflow to 561px inside a 390px-tall viewport. */
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .board-wrap {
+    order: 1;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Driven by height here rather than width, since height is the scarce
+     axis in landscape. */
+  .canvas-shell {
+    height: 100%;
+    width: auto;
+    max-width: 100%;
+  }
+
+  .touch-controls {
+    order: 2;
+    flex: none;
+    align-self: center;
+    width: min(168px, 30vw);
+  }
 }
 
 @media (max-width: 420px) {

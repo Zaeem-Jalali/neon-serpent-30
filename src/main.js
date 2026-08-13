@@ -218,6 +218,10 @@ function onVictory({ score, levelReached }) {
   const welcomeScreen = document.getElementById("welcomeScreen");
   const welcomeGreeting = document.getElementById("welcomeGreeting");
   const enterBtn = document.getElementById("enterBtn");
+  const consentRow = document.getElementById("consentRow");
+  const consentCheck = document.getElementById("consentCheck");
+  const overlayCloseBtn = document.getElementById("overlayCloseBtn");
+  const exitGameBtn = document.getElementById("exitGameBtn");
   const authScreen = document.getElementById("authScreen");
   const authGoogleBtn = document.getElementById("authGoogleBtn");
   const authGuestBtn = document.getElementById("authGuestBtn");
@@ -575,6 +579,10 @@ function onVictory({ score, levelReached }) {
     }
     next.classList.add("is-active");
     activeScreen = name;
+    // The game dialog is a viewport-level element that starts out carrying
+    // the `visible` class, so its CSS is keyed to this attribute to stop it
+    // covering the welcome and sign-in screens.
+    document.body.dataset.screen = name;
     // The canvas has no layout while its screen is hidden, so it must be
     // re-measured once the game screen is actually on-screen — otherwise it
     // keeps whatever size it had (often none) and draws blank.
@@ -660,6 +668,57 @@ function onVictory({ score, levelReached }) {
   document.addEventListener("fullscreenchange", () => requestAnimationFrame(resizeCanvas));
   document.addEventListener("webkitfullscreenchange", () => requestAnimationFrame(resizeCanvas));
 
+  /* Consent gate.
+   *
+   * The agreement has to be an explicit act, not something inferred from
+   * playing, so Enter stays disabled until the box is ticked. The answer is
+   * remembered so returning players are not asked on every visit, and the
+   * consent version is stored alongside it: if the policy materially
+   * changes, bumping this asks everyone again rather than silently relying
+   * on an agreement to a document that no longer exists.
+   */
+  const CONSENT_KEY = "neon-serpent-consent-v1";
+
+  function hasConsented() {
+    try {
+      return localStorage.getItem(CONSENT_KEY) === "1";
+    } catch {
+      // Private browsing with storage blocked: treat as not consented, ask
+      // each session rather than assuming agreement.
+      return false;
+    }
+  }
+
+  function recordConsent() {
+    try {
+      localStorage.setItem(CONSENT_KEY, "1");
+    } catch {
+      // Non-fatal — they can still play, they will just be asked again.
+    }
+  }
+
+  function syncConsentUI() {
+    const on = consentCheck.checked;
+    enterBtn.disabled = !on;
+    consentRow.classList.toggle("is-checked", on);
+  }
+
+  function exitToWelcome() {
+    audio.play("ui");
+    closeDrawer();
+    if (isFullscreen()) {
+      (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document);
+    }
+    // Bank whatever the run earned before leaving, then stop it so the game
+    // is not still ticking behind the welcome screen.
+    saveProgress();
+    state.running = false;
+    state.paused = false;
+    overlay.classList.remove("visible");
+    showScreen("welcome");
+    pickGreeting();
+  }
+
   function updateProfileUI(user) {
     const name = state.playerName || (user && !user.is_anonymous ? "Signed in" : "Guest");
     drawerWho.textContent = user
@@ -678,6 +737,10 @@ function onVictory({ score, levelReached }) {
   renderDailyHistory();
   pickGreeting();
   updateProfileUI(null);
+  document.body.dataset.screen = "welcome";
+  // Returning players keep their answer; first-timers must tick the box.
+  consentCheck.checked = hasConsented();
+  syncConsentUI();
   initAccountUI();
   soundBtn.textContent = state.soundEnabled === false ? "Sound off" : "Sound on";
   audio.enabled = state.soundEnabled !== false;
@@ -743,12 +806,32 @@ function onVictory({ score, levelReached }) {
   skinResetBtn.addEventListener("click", resetSkin);
 
   /* ---- app shell wiring ---- */
+  consentCheck.addEventListener("change", syncConsentUI);
+
+  // The disabled button swallows clicks, so the nudge is driven from the
+  // wrapper. Without this, tapping a dead button explains nothing.
+  consentRow.parentElement.addEventListener("click", (event) => {
+    if (!enterBtn.disabled || !enterBtn.contains(event.target)) return;
+    consentRow.classList.remove("nudge");
+    void consentRow.offsetWidth;
+    consentRow.classList.add("nudge");
+  });
+
   enterBtn.addEventListener("click", () => {
+    if (!consentCheck.checked) return;
     audio.init();
     audio.play("ui");
+    recordConsent();
     // Someone with a session already does not need to be asked again.
     showScreen(isSupabaseConfigured && !getCurrentUser() ? "auth" : "game");
   });
+
+  overlayCloseBtn.addEventListener("click", () => {
+    audio.play("ui");
+    overlay.classList.remove("visible");
+  });
+
+  exitGameBtn.addEventListener("click", exitToWelcome);
 
   authGoogleBtn.addEventListener("click", async () => {
     audio.play("ui");
@@ -1864,8 +1947,12 @@ function onVictory({ score, levelReached }) {
   }
 
   function cellSize() {
-    const availableW = state.viewWidth * 0.92;
-    const availableH = state.viewHeight * 0.92;
+    /* The inset used to be 8%, which on a phone was the difference between
+       10px and 11px cells — a tenth of the board, given the shell now hugs
+       the grid's own 3:2 shape instead of sitting inside a larger box. 4%
+       still keeps the board clear of the shell's 22px rounded corners. */
+    const availableW = state.viewWidth * 0.96;
+    const availableH = state.viewHeight * 0.96;
     return Math.floor(Math.min(availableW / GRID.cols, availableH / GRID.rows));
   }
 
