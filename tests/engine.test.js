@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import { createEngine } from "../src/engine.js";
-import { LEVELS, TIERS, GRID, BOSS_SHARDS_PER_CYCLE, BOSS_ARENA_HALF_SPAN, tierForLevel, playerMovesPerSec, rivalMovesPerSec } from "../src/levels.js";
+import { LEVELS, TIERS, GRID, BOSS_SHARDS_PER_CYCLE, BOSS_ARENA_HALF_SPAN, MAX_RIVAL_SPEED, tierForLevel, playerMovesPerSec, rivalMovesPerSec } from "../src/levels.js";
 import { key, mulberry32, hashSeed } from "../src/utils.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -110,13 +110,14 @@ test("speed is constant within a tier and steps up between tiers", () => {
   });
 });
 
-test("rival snakes exist only in the final tier, one per level, 2/sec slower", () => {
+test("rival snakes exist only in the final tier, one per level, capped at MAX_RIVAL_SPEED", () => {
   const finalTier = TIERS[TIERS.length - 1];
   LEVELS.forEach((level, i) => {
     const inFinalTier = i >= finalTier.from && i <= finalTier.to;
     if (inFinalTier) {
       assert.equal(level.enemies, 1, `level ${i + 1} should have exactly one rival`);
-      assert.equal(rivalMovesPerSec(i), playerMovesPerSec(i) - 2, `level ${i + 1} rival speed`);
+      assert.ok(rivalMovesPerSec(i) <= MAX_RIVAL_SPEED, `level ${i + 1} rival speed must not exceed the cap`);
+      assert.equal(rivalMovesPerSec(i), Math.min(MAX_RIVAL_SPEED, playerMovesPerSec(i) - 2), `level ${i + 1} rival speed`);
     } else {
       assert.equal(level.enemies, 0, `level ${i + 1} should have no rivals`);
     }
@@ -214,6 +215,11 @@ test("mirrored stages flip left/right only", () => {
   const probe = (input, from) => {
     state.snakeDir = { ...from };
     state.nextDir = { ...from };
+    // Buffered turns persist between requestDirection calls now (see
+    // MAX_QUEUED_TURNS in engine.js), so a probe that pokes snakeDir
+    // directly has to clear the queue too or it validates against the
+    // previous probe's leftover turn instead of `from`.
+    state.dirQueue.length = 0;
     engine.requestDirection(input);
     return state.nextDir;
   };
@@ -222,6 +228,75 @@ test("mirrored stages flip left/right only", () => {
   assert.deepEqual(probe("right", { x: 0, y: -1 }), { x: -1, y: 0 }, "right should steer left");
   assert.deepEqual(probe("up", { x: 1, y: 0 }), { x: 0, y: -1 }, "up should be unchanged");
   assert.deepEqual(probe("down", { x: 1, y: 0 }), { x: 0, y: 1 }, "down should be unchanged");
+});
+
+/* Regression tests for turns entered faster than the tick rate.
+ *
+ * Both cases below were live bugs, reproduced against this engine before the
+ * fix: a single `nextDir` slot silently dropped the first of two quick
+ * turns, and the reverse check compared against the APPLIED direction rather
+ * than the last one queued, which rejected legal chained turns. At
+ * Nightmare's 7 moves/sec (a 143ms tick) this read as the controls ignoring
+ * input. */
+function steerRig(levelIndex = 0) {
+  const engine = engineAt("campaign", levelIndex);
+  const { state } = engine;
+  state.snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+  state.snakeDir = { x: 1, y: 0 };
+  state.nextDir = { x: 1, y: 0 };
+  state.dirQueue.length = 0;
+  return engine;
+}
+
+test("two turns entered inside one tick both happen, in order", () => {
+  const engine = steerRig();
+  const { state } = engine;
+
+  engine.requestDirection("up");
+  engine.requestDirection("right");
+  assert.equal(state.dirQueue.length, 2, "both turns should be buffered, not coalesced");
+
+  runClear(state);
+  engine.step();
+  assert.deepEqual(state.snakeDir, { x: 0, y: -1 }, "the first turn applies on the next step");
+  runClear(state);
+  engine.step();
+  assert.deepEqual(state.snakeDir, { x: 1, y: 0 }, "the second turn applies on the step after");
+});
+
+test("a chained turn is legal even though it reverses the currently applied direction", () => {
+  const engine = steerRig();
+  const { state } = engine;
+
+  // Moving right: down-then-left is two ordinary turns, but `left` is the
+  // reverse of `right`, which the old single-slot check wrongly rejected.
+  engine.requestDirection("down");
+  engine.requestDirection("left");
+  assert.equal(state.dirQueue.length, 2, "down-then-left should both queue");
+
+  runClear(state);
+  engine.step();
+  assert.deepEqual(state.snakeDir, { x: 0, y: 1 });
+  runClear(state);
+  engine.step();
+  assert.deepEqual(state.snakeDir, { x: -1, y: 0 });
+});
+
+test("an actual reverse is still rejected, and the queue is bounded", () => {
+  const engine = steerRig();
+  const { state } = engine;
+
+  engine.requestDirection("left");
+  assert.equal(state.dirQueue.length, 0, "reversing straight into your own neck stays illegal");
+
+  engine.requestDirection("up");
+  engine.requestDirection("up");
+  assert.equal(state.dirQueue.length, 1, "repeating the same direction should not fill the queue");
+
+  engine.requestDirection("right");
+  engine.requestDirection("down");
+  engine.requestDirection("left");
+  assert.ok(state.dirQueue.length <= 2, "queue must stay bounded so mashing cannot buffer a long tail");
 });
 
 test("following your own tail is legal, but biting your body is not", () => {
@@ -580,7 +655,11 @@ test("The Collapse's shrink attack never exceeds a safe margin and always releas
 
     let maxMargin = 0;
     let shrinkDeaths = 0;
-    for (let i = 0; i < 140; i++) {
+    // 140 was tuned for the old attack cadence. Singularity Prime's combo
+    // alternates mirror/shrink one full cycle apart, so a shrink pulse can
+    // land twice as late as a single-attack boss's — 400 comfortably clears
+    // a full pulse-and-release for both bosses under the current cadence.
+    for (let i = 0; i < 400; i++) {
       runClear(state);
       const messageBefore = state.message;
       const head = state.snake[0];
@@ -633,7 +712,7 @@ test("Singularity Prime's hunting fragment is a normal rival at the tier's rival
   const engine = engineAt("campaign", BOSS_LEVELS.singularity);
   const { state } = engine;
   assert.equal(state.enemySnakes.length, 1);
-  assert.equal(state.currentLevel.rivalMovesPerSec, playerMovesPerSec(BOSS_LEVELS.singularity) - 2);
+  assert.equal(state.currentLevel.rivalMovesPerSec, Math.min(MAX_RIVAL_SPEED, playerMovesPerSec(BOSS_LEVELS.singularity) - 2));
 });
 
 test("dying mid-fight keeps hitsTaken but always hands back a fresh, clean cycle", () => {

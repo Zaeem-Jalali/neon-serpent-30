@@ -25,6 +25,12 @@ export const MAX_SHRINK_MARGIN = 3;
 // Rivals always move this many steps per second slower than the player.
 export const RIVAL_SPEED_DELTA = 2;
 
+/* Hard ceiling on rival speed, independent of the delta above. Nightmare
+ * tier runs at 7 moves/sec, so delta-2 alone would put the rival at 5/sec —
+ * fast enough that it was catching players almost as soon as it appeared.
+ * 3.5/sec keeps it a genuine threat without being unavoidable. */
+export const MAX_RIVAL_SPEED = 3.5;
+
 /* How many charge shards must be eaten before a boss's shielded core opens.
  * Constant across all four bosses on purpose: the encounter's rhythm should
  * be something a player recognises immediately in the second boss because
@@ -81,7 +87,7 @@ export const LEVELS = [
   { name: "Corrupt Core", desc: "Open ground, but the edges are closing and nothing is idle.", target: 8, layout: "chaos", walls: 9, hazards: 4, enemies: 1, portals: 2, powerups: 1, timer: 62, mirror: false, shrink: 92 },
   { name: "Overclock", desc: "Narrow lanes, hard turns, and a rival cutting you off.", target: 8, layout: "maze", walls: 16, hazards: 4, enemies: 1, portals: 2, powerups: 1, timer: 60, mirror: false, shrink: 90 },
   { name: "Final Grid", desc: "Every system at once, on ground you can still read.", target: 8, layout: "rings", walls: 16, hazards: 4, enemies: 1, portals: 2, powerups: 1, timer: 60, mirror: false, shrink: 90 },
-  { name: "Singularity Prime", desc: "Everything you have learned, at once: a shielded core, a compressing cage, flipped steering, and a fragment that hunts you while you work.", target: 5, layout: "boss", walls: 12, hazards: 2, enemies: 1, portals: 2, powerups: 1, timer: null, mirror: false, shrink: 0, boss: "singularity" }
+  { name: "Singularity Prime", desc: "Everything you have learned, at once: a shielded core, a compressing cage, flipped steering, and a fragment that hunts you while you work.", target: 5, layout: "boss", walls: 6, hazards: 1, enemies: 1, portals: 1, powerups: 1, timer: null, mirror: false, shrink: 0, boss: "singularity" }
 ];
 
 /* Difficulty tiers. The boundaries follow where the game actually changes
@@ -120,7 +126,7 @@ export const TIERS = [
     from: 24,
     to: 29,
     movesPerSec: 7,
-    blurb: "A steady 7 moves per second, and the only tier with a rival snake — a single hunter, moving 2 steps per second slower than you. Ends with everything the campaign taught you, at once."
+    blurb: "A steady 7 moves per second, and the only tier with a rival snake — a single hunter, capped well below your own speed. Ends with everything the campaign taught you, at once."
   }
 ];
 
@@ -134,6 +140,6 @@ export function playerMovesPerSec(levelIndex) {
 }
 
 export function rivalMovesPerSec(levelIndex) {
-  return Math.max(1, playerMovesPerSec(levelIndex) - RIVAL_SPEED_DELTA);
+  return Math.min(MAX_RIVAL_SPEED, Math.max(1, playerMovesPerSec(levelIndex) - RIVAL_SPEED_DELTA));
 }
 

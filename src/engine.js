@@ -58,6 +58,9 @@ export function createEngine({ emit = () => {} } = {}) {
     snake: [],
     snakeDir: { x: 1, y: 0 },
     nextDir: { x: 1, y: 0 },
+    /* Turns entered faster than the tick rate. See requestDirection for why
+       a single nextDir slot was not enough. */
+    dirQueue: [],
     grow: 0,
     food: null,
     powerups: [],
@@ -108,6 +111,7 @@ export function createEngine({ emit = () => {} } = {}) {
     state.snake = buildSnakeStart();
     state.snakeDir = { x: 1, y: 0 };
     state.nextDir = { x: 1, y: 0 };
+    state.dirQueue.length = 0;
     state.grow = 0;
 
     buildStaticMap(state.currentLevel);
@@ -754,9 +758,13 @@ export function createEngine({ emit = () => {} } = {}) {
     collapse: {
       exposedTicks: 26,
       attack: "shrink",
-      attackCooldown: 16,
-      attackTelegraph: 6,
-      attackDuration: 12,
+      // Rebalanced: 16/6/12 left the cage compressed for nearly as long as
+      // it was open, at 6 moves/sec — barely any room to breathe between
+      // pulses. 19/7/9 keeps the pulse itself shorter than the rest between
+      // pulses, and the longer telegraph gives more real time to react.
+      attackCooldown: 19,
+      attackTelegraph: 7,
+      attackDuration: 9,
       // Absolute margin during a pulse, not an increment — see beginBossAttack.
       // Boss levels configure shrink:0, so 0 is always the baseline to release
       // back to. The binding safety constraint is the player's own spawn tail
@@ -765,11 +773,20 @@ export function createEngine({ emit = () => {} } = {}) {
       shrinkTarget: 4
     },
     singularity: {
-      exposedTicks: 22,
+      // Rebalanced: 22 ticks at 7 moves/sec is ~3.1s to notice the core is
+      // open, cross the arena and land the hit — too tight once a rival
+      // snake is also loose on the board. 28 gives a genuinely playable
+      // window without trivialising the fight.
+      exposedTicks: 28,
       attack: "combo",
-      attackCooldown: 14,
-      attackTelegraph: 6,
-      attackDuration: 12,
+      // Same cadence rework as Collapse, scaled for the faster tier: more
+      // rest between attacks, a shorter active window, longer telegraph.
+      // The combo already strictly alternates mirror/shrink one at a time
+      // (see updateBoss below) — this only slows the pace, it does not
+      // change that a single restriction, never both, is ever active.
+      attackCooldown: 23,
+      attackTelegraph: 7,
+      attackDuration: 9,
       shrinkTarget: 4
     }
   };
@@ -992,6 +1009,28 @@ export function createEngine({ emit = () => {} } = {}) {
     boss.attackTelegraphTicks = 0;
   }
 
+  /* How many un-applied turns may be buffered.
+   *
+   * This used to be a single `nextDir` slot, which dropped real input in two
+   * distinct ways at speed (both reproduced against this engine, not
+   * theorised):
+   *
+   *   1. Two turns entered inside one tick coalesced — pressing up then
+   *      right quickly left only `right` set, and the up turn simply never
+   *      happened.
+   *   2. The reverse check compared against `snakeDir`, the direction
+   *      currently APPLIED, rather than the last one queued. Moving right,
+   *      pressing down-then-left had the left rejected as a reverse, even
+   *      though once `down` lands it is an ordinary turn.
+   *
+   * Both read to a player as "the controls dropped my input", which is
+   * exactly the complaint at Nightmare's 7 moves/sec where a tick is 143ms.
+   * A depth of 2 covers a genuine quick double-turn (round a corner and
+   * immediately again) without letting a mashed key buffer up a long tail of
+   * moves the player has since changed their mind about.
+   */
+  const MAX_QUEUED_TURNS = 2;
+
   function requestDirection(dirName) {
     if (!state.running || state.paused || state.over || state.won) return;
     const mapping = {
@@ -1010,11 +1049,21 @@ export function createEngine({ emit = () => {} } = {}) {
       // otherwise leak a negative zero into the stored direction.
       dir = { x: -dir.x + 0, y: dir.y };
     }
-    const current = state.snakeDir;
-    const isReverse = current.x + dir.x === 0 && current.y + dir.y === 0;
-    if (!isReverse) {
-      state.nextDir = dir;
-    }
+    if (state.dirQueue.length >= MAX_QUEUED_TURNS) return;
+
+    // Validate against the last turn the player has already asked for, not
+    // the one currently applied — that is what makes a chained turn legal.
+    const previous = state.dirQueue.length
+      ? state.dirQueue[state.dirQueue.length - 1]
+      : state.snakeDir;
+    const isReverse = previous.x + dir.x === 0 && previous.y + dir.y === 0;
+    const isSame = previous.x === dir.x && previous.y === dir.y;
+    if (isReverse || isSame) return;
+
+    state.dirQueue.push(dir);
+    // Kept in sync so anything reading nextDir (rendering, tests, the debug
+    // harness) still sees the turn that will actually be applied next.
+    state.nextDir = state.dirQueue[0];
   }
 
 
@@ -1077,7 +1126,10 @@ export function createEngine({ emit = () => {} } = {}) {
       }
     }
 
-    const appliedDir = state.nextDir;
+    // Consume one buffered turn per step, so a quick double-turn plays back
+    // over two ticks instead of the second overwriting the first.
+    const appliedDir = state.dirQueue.length ? state.dirQueue.shift() : state.nextDir;
+    state.nextDir = state.dirQueue.length ? state.dirQueue[0] : appliedDir;
     state.snakeDir = appliedDir;
     const head = state.snake[0];
     const next = {
@@ -1626,6 +1678,7 @@ export function createEngine({ emit = () => {} } = {}) {
     state.snake = buildSnakeStart();
     state.snakeDir = { x: 1, y: 0 };
     state.nextDir = { x: 1, y: 0 };
+    state.dirQueue.length = 0;
     state.grow = 0;
     state.shield = 0;
     state.floatingSlowTicks = 0;

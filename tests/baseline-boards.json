@@ -1,6 +1,6 @@
 {
   "_comment": "FNV-1a fingerprints of every generated board. Level generation is fully seeded, so these must match exactly after any refactor that claims to preserve behaviour. Regenerate deliberately with tools/update-baseline.mjs when a gameplay change is meant to alter generation.",
-  "_captured": "added boss encounters on levels 8/16/24/30 (The Warden, The Disruptor, The Collapse, Singularity Prime), replacing their previous configs; fingerprint now also covers charge-shard placement",
+  "_captured": "Open up level 30 (Singularity Prime) to be less cluttered: walls 12->6, hazards 2->1, portals 2->1, so the arena is easier to navigate while dodging boss attacks",
   "_fields": "walls, portals, hazards, enemies, powerups, food, snake, stepMs, missionGoal, timer, mirror, bossCharges",
   "campaign": [
     "7ba74755",
@@ -32,7 +32,7 @@
     "2d407cf",
     "283962df",
     "c0fa21a1",
-    "c3f8d6bd"
+    "32b80f3a"
   ],
   "daily-2026-08-09": [
     "1eb1547d",
@@ -64,7 +64,7 @@
     "8d2046e4",
     "bb05ebc",
     "9908ba4c",
-    "5fb8973c"
+    "6ad16fcb"
   ],
   "daily-2026-12-25": [
     "cacd6fac",
@@ -96,6 +96,6 @@
     "650a3b5",
     "f55ac5d6",
     "9e8b0ae3",
-    "d439d2d0"
+    "7147d985"
   ]
 }
