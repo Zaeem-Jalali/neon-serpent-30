@@ -61,10 +61,10 @@ everything in `assets/`. Re-run it after changing the palette.
 
 ## Accounts & leaderboard (Supabase)
 
-The local leaderboard (`server.js` / `/api/scores`) is the only leaderboard
-today. Supabase support is scaffolded but **not yet wired into the UI** —
-this section covers the account/database half so it's ready the moment
-sign-in gets built on top of it.
+Accounts and the live leaderboard run on Supabase. Sign-in (Google or
+anonymous guest), campaign-progress sync and the leaderboard are wired into
+the UI; `server.js` / `/api/scores` remains as the local-development
+fallback for when no Supabase project is configured.
 
 Why Supabase, and why this shape:
 
@@ -101,9 +101,9 @@ Setup:
    before it can go out of testing mode — needed before step 3's Google
    provider works for anyone other than the project owner.
 
-What's left after that: the actual sign-in UI, the localStorage → Supabase
-migration on first sign-in, and switching the leaderboard panel to read from
-the `public.leaderboard` view instead of `/api/scores`.
+Still open: linking an anonymous guest account to Google without losing its
+progress (Supabase identity linking), and server-side replay validation to
+close the cheat gap noted above.
 
 ## App shell
 
@@ -345,3 +345,11 @@ runAudit({ seeds: ['campaign', 'daily-2026-08-09'], ticks: 1500 })
 A clean result is `issues: []` and `threw: 0`. The `notCleared` list is only a
 measure of how far the built-in greedy autopilot got — it is not a failure
 signal, since that bot plays far worse than a person.
+
+## Licence
+
+Copyright (c) 2026 Zaeem Jalali. All rights reserved. See [LICENSE](LICENSE).
+
+This code is public for portfolio and reference purposes — it is **not** open
+source. Reading and learning from it is welcome; copying, redistributing or
+building on it is not permitted without written permission.
