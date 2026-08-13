@@ -364,6 +364,15 @@ const server = http.createServer((req, res) => {
   serveStatic(req, res);
 });
 
-server.listen(port, "127.0.0.1", () => {
-  console.log(`Neon Serpent 30 running at http://127.0.0.1:${port}`);
+/* Loopback by default: this server has no authentication, so it should not
+   be reachable from the network unless that is explicitly asked for. Set
+   HOST=0.0.0.0 to test on a phone over the same Wi-Fi — opt-in, so it can
+   never happen by accident. */
+const host = process.env.HOST || "127.0.0.1";
+
+server.listen(port, host, () => {
+  console.log(`Neon Serpent 30 running at http://${host === "0.0.0.0" ? "0.0.0.0" : "127.0.0.1"}:${port}`);
+  if (host === "0.0.0.0") {
+    console.log("Reachable from other devices on this network. Stop the server when you are done.");
+  }
 });

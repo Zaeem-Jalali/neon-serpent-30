@@ -54,12 +54,37 @@ self.addEventListener("install", (event) => {
   );
 });
 
+/* Files without which the app cannot start. Used to decide whether the new
+   cache is healthy enough to retire the previous one. */
+const CRITICAL = ["./index.html", "./styles.css", "./src/main.js"];
+
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_VERSION).map((key) => caches.delete(key))))
-      .then(() => self.clients.claim())
+    (async () => {
+      /* Only retire old caches once the new one can actually serve the app.
+       *
+       * Install deliberately tolerates individual precache failures
+       * (allSettled), so a flaky network can leave the new cache
+       * incomplete. Deleting the previous cache unconditionally then threw
+       * away the last working copy and left the user with a half-cached,
+       * unstartable app and no way back — a plausible cause of the "does
+       * not load completely" reports. `caches.match()` searches every
+       * cache, so keeping the old one around simply gives the fetch
+       * handler more to fall back on until the new one is sound.
+       */
+      const cache = await caches.open(CACHE_VERSION);
+      const present = await Promise.all(CRITICAL.map((url) => cache.match(url)));
+      const healthy = present.every(Boolean);
+
+      if (healthy) {
+        const keys = await caches.keys();
+        await Promise.all(
+          keys.filter((key) => key !== CACHE_VERSION).map((key) => caches.delete(key))
+        );
+      }
+
+      await self.clients.claim();
+    })()
   );
 });
 

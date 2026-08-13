@@ -203,7 +203,7 @@ function onVictory({ score, levelReached }) {
   const restartBtn = document.getElementById("restartBtn");
   const playBtn = document.getElementById("playBtn");
   const copyCodeBtn = document.getElementById("copyCodeBtn");
-  const dailyCopyBtn = document.getElementById("dailyCopyBtn");
+  const overlayExitBtn = document.getElementById("overlayExitBtn");
   const shareBtn = document.getElementById("shareBtn");
   const shareCodeBtn = document.getElementById("shareCodeBtn");
   const soundBtn = document.getElementById("soundBtn");
@@ -796,7 +796,7 @@ function onVictory({ score, levelReached }) {
     restartCurrent();
   });
   copyCodeBtn.addEventListener("click", copyChallengeCode);
-  dailyCopyBtn.addEventListener("click", copyChallengeCode);
+  overlayExitBtn.addEventListener("click", exitToWelcome);
   shareBtn.addEventListener("click", shareGame);
   shareCodeBtn.addEventListener("click", shareGame);
   checkpointBtn.addEventListener("click", resumeFromCheckpoint);
