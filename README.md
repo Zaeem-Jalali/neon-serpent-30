@@ -59,6 +59,99 @@ node tools/make-icons.js
 It uses only Node's built-in `zlib` — no image dependencies — and rewrites
 everything in `assets/`. Re-run it after changing the palette.
 
+## Accounts & leaderboard (Supabase)
+
+The local leaderboard (`server.js` / `/api/scores`) is the only leaderboard
+today. Supabase support is scaffolded but **not yet wired into the UI** —
+this section covers the account/database half so it's ready the moment
+sign-in gets built on top of it.
+
+Why Supabase, and why this shape:
+
+- **Google OAuth + anonymous guest play, no email/password.** This codebase
+  never handles a credential of any kind.
+- **The Supabase JS SDK, loaded from a CDN (`esm.sh`) via dynamic import**,
+  not an npm dependency — there's still no build step. It's fetched lazily
+  by `src/supabaseClient.js` and only when a project is actually configured,
+  so an unconfigured project adds zero network requests.
+- **Row Level Security everywhere.** A player can only ever write rows that
+  belong to their own `user_id`; see `supabase/schema.sql` for the exact
+  policies. The `anon`/publishable key that goes in `src/supabaseConfig.js`
+  is safe to commit — Supabase's model puts it in every client bundle and
+  relies on RLS, not secrecy, to restrict access. The `service_role` key is
+  the one that must never appear here.
+- **Known gap, not a secret one**: this is client-reported scores validated
+  only by RLS, same trust model as the current local leaderboard. It is not
+  cheat-proof — a determined player can still POST a fabricated score. The
+  real fix is server-side replay validation, made possible by the engine
+  being fully seeded and DOM-free (`{seed, startLevel, inputs[]}` is enough
+  to replay a run headlessly) — a deliberate follow-up, not a blocker.
+
+Setup:
+
+1. Create a project at [supabase.com](https://supabase.com).
+2. In **SQL Editor**, paste and run `supabase/schema.sql` in full. It's
+   idempotent — safe to re-run after a schema tweak.
+3. In **Authentication → Providers**, enable **Google** (needs a Google
+   Cloud OAuth client — set its authorized redirect URI to the callback URL
+   Supabase shows on that same page) and enable **Anonymous sign-ins**.
+4. In **Project Settings → API**, copy the **Project URL** and the
+   **anon/publishable key** into `src/supabaseConfig.js`.
+5. A Google Cloud OAuth consent screen requires a live privacy policy URL
+   before it can go out of testing mode — needed before step 3's Google
+   provider works for anyone other than the project owner.
+
+What's left after that: the actual sign-in UI, the localStorage → Supabase
+migration on first sign-in, and switching the leaderboard panel to read from
+the `public.leaderboard` view instead of `/api/scores`.
+
+## App shell
+
+The UI is three screens — **welcome → sign-in → game** — rather than one long
+scrolling page. Everything that used to sit in a right-hand sidebar (modes,
+level select, leaderboard, stats, appearance, audio, legend) now lives behind
+the single menu button in the game bar, split across **Play / Stats /
+Settings** tabs.
+
+Only one screen is active at a time; the others stay in the DOM so the canvas
+is never destroyed and re-created. `body.app-shell` locks the page to the
+viewport (`100dvh`, no document scroll) — that class is what keeps
+`privacy.html` and `terms.html`, which share this stylesheet, scrolling
+normally.
+
+A fullscreen toggle sits in the game bar and in Settings. It requests
+fullscreen on the game screen rather than `<body>` so the drawer and the
+level-select dialog, both fixed-position siblings, keep working.
+
+### Input latency
+
+Turns are buffered in a short queue (`dirQueue`, depth 2) rather than a single
+`nextDir` slot. The single slot dropped real input two ways, both reproduced
+against the engine before the fix and now covered by tests:
+
+- two turns entered inside one tick coalesced, so the first never happened;
+- the reverse check compared against the *applied* direction instead of the
+  last *queued* one, which rejected legal chained turns (moving right,
+  down-then-left had the left refused).
+
+At Nightmare's 7 moves/sec a tick is 143ms, so both read as the controls
+ignoring input.
+
+### Frame pacing and canvas sizing
+
+`requestAnimationFrame` stops while a tab is hidden, so the first frame back
+can report a gap of many seconds. Feeding that into the fixed-step accumulator
+ran hundreds of simulation steps in one frame — the page locked up and the
+snake teleported, usually into a wall. Frame deltas are clamped
+(`MAX_FRAME_DELTA_MS`), and `visibilitychange` resets the clock on return.
+
+The canvas backing store is kept in sync three ways, because the element
+resizes for reasons that never fire a window resize: a `ResizeObserver` on the
+canvas, a `visibilitychange` re-measure, and a throttled check inside the game
+loop as a fallback for when the observer is unsupported or never delivers.
+`resizeCanvas()` also ignores zero-size boxes, which would otherwise wipe the
+backing store while the element is hidden and leave a blank board.
+
 ## Controls
 
 | Input | Action |
@@ -183,6 +276,9 @@ colour shift on the shield itself) gives real warning before an attack fires.
 | `manifest.json` | PWA metadata |
 | `netlify.toml` | Headers and cache rules for deployment |
 | `server.js` | Local dev server plus the `/api/scores` leaderboard |
+| `supabase/schema.sql` | Tables, RLS policies and the leaderboard view — see "Accounts & leaderboard" |
+| `src/supabaseConfig.js` | Project URL and anon key (blank = accounts/sync off) |
+| `src/supabaseClient.js` | Lazily loads the Supabase SDK, only when configured |
 | `tools/make-icons.js` | Generates everything in `assets/` |
 | `tools/difficulty-report.mjs` | Measures what each level actually demands |
 | `tools/update-baseline.mjs` | Re-records board fingerprints, deliberately |
