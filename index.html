@@ -35,106 +35,180 @@
 
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body class="app-shell">
   <div class="bg-orb orb-a"></div>
   <div class="bg-orb orb-b"></div>
   <div class="bg-grid"></div>
 
-  <main class="shell">
-    <header class="topbar glass">
-      <div>
-        <p class="eyebrow">Playable challenge ladder</p>
-        <h1>Neon Serpent 30</h1>
-        <p class="subtitle">A tougher, faster, more modern snake game with 30 handcrafted levels, daily challenge seeds, traps, drones, and leaderboard-ready scoring.</p>
+  <!-- ============================ WELCOME ============================ -->
+  <section id="welcomeScreen" class="screen is-active" aria-label="Welcome">
+    <div class="welcome-inner">
+      <div class="welcome-mark" aria-hidden="true">
+        <span class="wm-seg wm-1"></span>
+        <span class="wm-seg wm-2"></span>
+        <span class="wm-seg wm-3"></span>
+        <span class="wm-core"></span>
       </div>
-      <div class="top-actions">
-        <button id="campaignBtn" class="chip active">Campaign</button>
-        <button id="dailyBtn" class="chip">Daily Rift</button>
-        <button id="levelsBtn" class="chip">Levels</button>
-        <button id="pauseBtn" class="chip">Pause</button>
-        <button id="soundBtn" class="chip" aria-pressed="true" title="Toggle sound (M)">Sound on</button>
-        <button id="paletteBtn" class="chip" aria-pressed="false" title="Toggle colorblind-safe palette (C)">Neon palette</button>
-        <button id="restartBtn" class="chip danger">Restart</button>
+      <p class="eyebrow welcome-eyebrow">Playable challenge ladder</p>
+      <h1 class="welcome-title">Neon Serpent<span class="welcome-30">30</span></h1>
+      <p id="welcomeGreeting" class="welcome-greeting">Booting the grid&hellip;</p>
+      <button id="enterBtn" class="btn-hero">
+        <span>Enter the Grid</span>
+      </button>
+      <p class="welcome-foot">30 levels &middot; 4 tiers &middot; 4 bosses &middot; one daily seed for everyone</p>
+    </div>
+  </section>
+
+  <!-- ============================= AUTH ============================== -->
+  <section id="authScreen" class="screen" aria-label="Sign in">
+    <div class="auth-card">
+      <div class="auth-glow" aria-hidden="true"></div>
+      <p class="eyebrow">Identity</p>
+      <h2 class="auth-title">Claim your rank</h2>
+      <p class="auth-sub">Sign in to carry progress across devices and post to the live leaderboard. Or jump straight in &mdash; nothing is locked behind an account.</p>
+
+      <div class="auth-actions">
+        <button id="authGoogleBtn" class="btn-auth btn-auth-google">
+          <svg class="auth-icon" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+            <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.7-2 5-4.4 6.6v5.5h7.1c4.1-3.8 6.6-9.4 6.6-16.1z"/>
+            <path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.4l-7.1-5.5c-2 1.3-4.5 2.1-7.4 2.1-5.7 0-10.5-3.8-12.2-9H4.5v5.7C8.1 41.1 15.4 46 24 46z"/>
+            <path fill="#FBBC05" d="M11.8 28.2c-.4-1.3-.7-2.7-.7-4.2s.2-2.9.7-4.2v-5.7H4.5C3 17 2 20.4 2 24s1 7 2.5 9.9l7.3-5.7z"/>
+            <path fill="#EA4335" d="M24 10.8c3.2 0 6.1 1.1 8.4 3.3l6.3-6.3C34.9 4.2 29.9 2 24 2 15.4 2 8.1 6.9 4.5 14.1l7.3 5.7c1.7-5.2 6.5-9 12.2-9z"/>
+          </svg>
+          <span>Continue with Google</span>
+        </button>
+        <button id="authGuestBtn" class="btn-auth btn-auth-guest">
+          <span class="auth-icon auth-icon-guest" aria-hidden="true">&#9673;</span>
+          <span>Play as Guest</span>
+        </button>
+      </div>
+
+      <button id="authSkipBtn" class="auth-skip">Skip &mdash; just let me play</button>
+      <p id="authStatus" class="auth-status" role="status"></p>
+      <p class="auth-legal">
+        By continuing you agree to our
+        <a href="terms.html">Terms</a> and <a href="privacy.html">Privacy Policy</a>.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================= GAME ============================== -->
+  <section id="gameScreen" class="screen" aria-label="Game">
+    <header class="game-bar">
+      <button id="navToggle" class="icon-btn" aria-label="Open menu" aria-expanded="false">
+        <span class="burger" aria-hidden="true"><i></i><i></i><i></i></span>
+      </button>
+
+      <div class="hud-strip">
+        <div class="hud-cell"><span>Level</span><strong id="levelLabel">1</strong></div>
+        <div class="hud-cell"><span>Score</span><strong id="scoreLabel">0</strong></div>
+        <div class="hud-cell"><span>Lives</span><strong id="livesLabel">3</strong></div>
+      </div>
+
+      <div class="bar-actions">
+        <button id="pauseBtn" class="icon-btn" aria-label="Pause">&#10074;&#10074;</button>
+        <button id="fullscreenBtn" class="icon-btn" aria-label="Toggle fullscreen">&#9974;</button>
       </div>
     </header>
 
-    <section class="layout">
-      <article class="arena glass">
-        <div class="arena-header">
-          <div class="stat-pill"><span>Level</span><strong id="levelLabel">1</strong></div>
-          <div class="stat-pill"><span>Score</span><strong id="scoreLabel">0</strong></div>
-          <div class="stat-pill"><span>Lives</span><strong id="livesLabel">3</strong></div>
-          <div class="stat-pill"><span>Checkpoint</span><strong id="checkpointLabel">1</strong></div>
-          <div class="stat-pill"><span>Seed</span><strong id="seedLabel">Campaign</strong></div>
-        </div>
-
-        <div class="canvas-shell">
-          <canvas id="gameCanvas" width="960" height="640" aria-label="Snake game board"></canvas>
-          <div id="overlay" class="overlay visible">
-            <div class="overlay-card">
-              <p class="overlay-kicker">Tap to start</p>
-              <h2>Outsmart the grid</h2>
-              <p id="overlayText">Collect neon cores, dodge drones, survive portals, and clear all 30 levels. Arrow keys, WASD, swipe, or the on-screen pad all work.</p>
-              <div class="overlay-actions">
-                <button id="playBtn" class="primary">Start Game</button>
-                <button id="checkpointBtn" class="secondary is-hidden">Resume at checkpoint</button>
-                <button id="overlayLevelsBtn" class="secondary">Choose level</button>
-                <button id="dailyCopyBtn" class="secondary">Copy Daily Code</button>
-              </div>
+    <div class="stage">
+      <div class="canvas-shell">
+        <canvas id="gameCanvas" width="960" height="640" aria-label="Snake game board"></canvas>
+        <div id="overlay" class="overlay visible">
+          <div class="overlay-card">
+            <p class="overlay-kicker">Tap to start</p>
+            <h2 id="overlayTitle">Outsmart the grid</h2>
+            <p id="overlayText">Collect neon cores, dodge drones, survive portals, and clear all 30 levels. Arrow keys, WASD, swipe, or the on-screen pad all work.</p>
+            <div class="overlay-actions">
+              <button id="playBtn" class="primary">Start Game</button>
+              <button id="checkpointBtn" class="secondary is-hidden">Resume at checkpoint</button>
+              <button id="overlayLevelsBtn" class="secondary">Choose level</button>
+              <button id="dailyCopyBtn" class="secondary">Copy Daily Code</button>
+              <button id="shareBtn" class="secondary">Share</button>
             </div>
           </div>
         </div>
+      </div>
 
-        <div class="touch-controls">
-          <div></div>
-          <button data-dir="up" class="pad-btn" aria-label="Move up">&#9650;</button>
-          <div></div>
-          <button data-dir="left" class="pad-btn" aria-label="Move left">&#9664;</button>
-          <button data-dir="down" class="pad-btn" aria-label="Move down">&#9679;</button>
-          <button data-dir="right" class="pad-btn" aria-label="Move right">&#9654;</button>
+      <div class="touch-controls">
+        <div></div>
+        <button data-dir="up" class="pad-btn" aria-label="Move up">&#9650;</button>
+        <div></div>
+        <button data-dir="left" class="pad-btn" aria-label="Move left">&#9664;</button>
+        <button data-dir="down" class="pad-btn" aria-label="Move down">&#9679;</button>
+        <button data-dir="right" class="pad-btn" aria-label="Move right">&#9654;</button>
+      </div>
+      <p id="missionTicker" class="mission-ticker">Collect 3 cores to unlock the next level.</p>
+    </div>
+  </section>
+
+  <!-- ============================ DRAWER ============================= -->
+  <div id="navScrim" class="nav-scrim"></div>
+  <aside id="navDrawer" class="nav-drawer" aria-label="Menu" aria-hidden="true">
+    <header class="drawer-head">
+      <div>
+        <p class="eyebrow">Neon Serpent 30</p>
+        <p id="drawerWho" class="drawer-who">Playing locally</p>
+      </div>
+      <button id="navClose" class="icon-btn" aria-label="Close menu">&times;</button>
+    </header>
+
+    <nav class="drawer-tabs" role="tablist">
+      <button id="tabPlayBtn" class="drawer-tab active" role="tab" aria-selected="true" aria-controls="tabPlay">Play</button>
+      <button id="tabStatsBtn" class="drawer-tab" role="tab" aria-selected="false" aria-controls="tabStats">Stats</button>
+      <button id="tabSettingsBtn" class="drawer-tab" role="tab" aria-selected="false" aria-controls="tabSettings">Settings</button>
+    </nav>
+
+    <div class="drawer-body">
+      <!-- ---------------------------- PLAY ---------------------------- -->
+      <div id="tabPlay" class="tab-panel is-active" role="tabpanel">
+        <div class="mode-switch">
+          <button id="campaignBtn" class="mode-btn active">Campaign</button>
+          <button id="dailyBtn" class="mode-btn">Daily Rift</button>
         </div>
-        <p class="mini-note pad-note">On a phone you can also swipe anywhere on the board.</p>
-      </article>
 
-      <aside class="sidebar">
-        <section class="panel glass">
+        <button id="levelsBtn" class="drawer-cta">Choose Level</button>
+        <button id="restartBtn" class="drawer-cta danger">Restart Run</button>
+
+        <section class="d-card">
           <h3>Current Level</h3>
-          <p id="levelName" class="panel-title">Spark Start</p>
-          <p id="levelDesc" class="panel-copy">Slow warm-up with a few obstacles.</p>
+          <p id="levelName" class="d-title">Spark Start</p>
+          <p id="levelDesc" class="d-copy">Slow warm-up with a few obstacles.</p>
           <ul id="modifierList" class="modifier-list"></ul>
         </section>
 
-        <section class="panel glass">
+        <section class="d-card">
           <h3>Mission</h3>
-          <p id="missionText" class="panel-copy">Collect 3 cores to unlock the next level.</p>
-          <div class="mission-meter">
-            <div id="missionFill" class="mission-fill"></div>
-          </div>
+          <p id="missionText" class="d-copy">Collect 3 cores to unlock the next level.</p>
+          <div class="mission-meter"><div id="missionFill" class="mission-fill"></div></div>
           <p class="mini-note" id="timerText">No time limit on this stage.</p>
-        </section>
-
-        <section class="panel glass">
-          <h3>Boosts &amp; Hazards</h3>
-          <div class="legend-grid">
-            <div><span class="glyph food"></span> Core &mdash; circle</div>
-            <div><span class="glyph shield"></span> Shield &mdash; hexagon</div>
-            <div><span class="glyph slow"></span> Time warp &mdash; triangle</div>
-            <div><span class="glyph bonus"></span> Score boost &mdash; star</div>
-            <div><span class="glyph hazard"></span> Drone &mdash; spiked diamond</div>
-            <div><span class="glyph enemy"></span> Rival snake &mdash; square</div>
-            <div><span class="glyph portal"></span> Portal &mdash; ring</div>
+          <div class="hud-inline">
+            <span>Checkpoint <strong id="checkpointLabel">1</strong></span>
+            <span>Seed <strong id="seedLabel">Campaign</strong></span>
           </div>
-          <p class="mini-note">Every object has its own shape, so the board stays readable without relying on colour alone.</p>
         </section>
 
-        <section class="panel glass">
+        <section class="d-card">
           <h3>Challenge Code</h3>
           <p id="challengeCode" class="code-block">Campaign mode</p>
-          <button id="copyCodeBtn" class="secondary full">Copy code</button>
-          <p class="mini-note">Daily Rift uses a shared seed so everyone gets the same challenge and can compare scores.</p>
+          <div class="code-actions">
+            <button id="copyCodeBtn" class="secondary full">Copy code</button>
+            <button id="shareCodeBtn" class="secondary full">Share</button>
+          </div>
+          <p class="mini-note">Daily Rift uses a shared seed so everyone gets the same challenge.</p>
+        </section>
+      </div>
+
+      <!-- ---------------------------- STATS --------------------------- -->
+      <div id="tabStats" class="tab-panel" role="tabpanel">
+        <section class="d-card">
+          <h3>Best Scores</h3>
+          <div class="score-row"><span>Campaign</span><strong id="bestCampaign">0</strong></div>
+          <div class="score-row"><span>Daily Rift</span><strong id="bestDaily">0</strong></div>
+          <div class="score-row"><span>Highest level</span><strong id="bestLevel">1</strong></div>
         </section>
 
-        <section class="panel glass">
+        <section class="d-card">
           <h3>Leaderboard</h3>
           <div class="lb-tabs">
             <button id="lbCampaignTab" class="mini-tab active">Campaign</button>
@@ -149,16 +223,73 @@
           <p id="lbStatus" class="mini-note">Set a name and finished runs post automatically.</p>
         </section>
 
-        <section class="panel glass">
-          <h3>Best Scores</h3>
-          <div class="score-row"><span>Campaign</span><strong id="bestCampaign">0</strong></div>
-          <div class="score-row"><span>Daily Rift</span><strong id="bestDaily">0</strong></div>
-          <div class="score-row"><span>Highest level</span><strong id="bestLevel">1</strong></div>
+        <section class="d-card">
+          <h3>Daily History</h3>
+          <ol id="dailyHistoryList" class="lb-list"><li class="lb-empty">No Daily Rift runs yet.</li></ol>
+          <p class="mini-note">Your last few Daily Rift attempts, one per day, best score kept.</p>
         </section>
-      </aside>
-    </section>
-  </main>
+      </div>
 
+      <!-- -------------------------- SETTINGS -------------------------- -->
+      <div id="tabSettings" class="tab-panel" role="tabpanel">
+        <section id="accountPanel" class="d-card is-hidden">
+          <h3>Account</h3>
+          <div class="profile-row">
+            <span id="profileAvatar" class="profile-avatar" aria-hidden="true">&#9673;</span>
+            <div class="profile-meta">
+              <p id="profileName" class="profile-name">Guest</p>
+              <p id="accountStatus" class="mini-note">Playing locally &mdash; sign in to sync progress.</p>
+            </div>
+          </div>
+          <div id="accountActions" class="skin-actions">
+            <button id="signInGoogleBtn" class="secondary">Sign in with Google</button>
+            <button id="signInGuestBtn" class="secondary">Play as Guest</button>
+          </div>
+          <button id="signOutBtn" class="secondary full is-hidden">Sign out</button>
+        </section>
+
+        <section class="d-card">
+          <h3>Appearance</h3>
+          <div class="skin-row">
+            <span id="skinSwatch" class="skin-swatch"></span>
+            <span id="skinName" class="skin-name">Default</span>
+          </div>
+          <div class="skin-actions">
+            <button id="skinShuffleBtn" class="secondary">Shuffle</button>
+            <button id="skinResetBtn" class="secondary">Reset</button>
+          </div>
+          <button id="paletteBtn" class="secondary full" aria-pressed="false" title="Toggle colorblind-safe palette (C)">Neon palette</button>
+          <p class="mini-note">Skins are cosmetic only &mdash; hazard, food and portal colours stay tied to your palette for readability.</p>
+        </section>
+
+        <section class="d-card">
+          <h3>Audio &amp; Display</h3>
+          <button id="soundBtn" class="secondary full" aria-pressed="true" title="Toggle sound (M)">Sound on</button>
+          <button id="fullscreenBtn2" class="secondary full">Toggle fullscreen</button>
+        </section>
+
+        <section class="d-card">
+          <h3>Boosts &amp; Hazards</h3>
+          <div class="legend-grid">
+            <div><span class="glyph food"></span> Core &mdash; circle</div>
+            <div><span class="glyph shield"></span> Shield &mdash; hexagon</div>
+            <div><span class="glyph slow"></span> Time warp &mdash; triangle</div>
+            <div><span class="glyph bonus"></span> Score boost &mdash; star</div>
+            <div><span class="glyph hazard"></span> Drone &mdash; spiked diamond</div>
+            <div><span class="glyph enemy"></span> Rival snake &mdash; square</div>
+            <div><span class="glyph portal"></span> Portal &mdash; ring</div>
+          </div>
+          <p class="mini-note">Every object has its own shape, so the board stays readable without relying on colour alone.</p>
+        </section>
+
+        <p class="drawer-legal">
+          <a href="privacy.html">Privacy</a> &middot; <a href="terms.html">Terms</a>
+        </p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ========================== LEVEL SELECT ========================= -->
   <div id="levelSelect" class="level-select" role="dialog" aria-modal="true" aria-labelledby="lsTitle">
     <div class="ls-panel glass">
       <header class="ls-header">

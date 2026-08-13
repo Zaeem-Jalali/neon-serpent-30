@@ -17,16 +17,21 @@
  * Bump CACHE_VERSION whenever a precached file changes; the activate handler
  * deletes every other cache so old assets cannot linger.
  */
-const CACHE_VERSION = "neon-serpent-v2";
+const CACHE_VERSION = "neon-serpent-v3";
 
 const PRECACHE = [
   "./",
   "./index.html",
+  "./privacy.html",
+  "./terms.html",
   "./styles.css",
   "./src/main.js",
   "./src/engine.js",
   "./src/levels.js",
   "./src/utils.js",
+  "./src/cloudSync.js",
+  "./src/supabaseClient.js",
+  "./src/supabaseConfig.js",
   "./sw-register.js",
   "./manifest.json",
   "./assets/favicon.svg",
@@ -94,13 +99,49 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Everything else is code: prefer the network, fall back to cache offline.
-  event.respondWith(
-    fetchAndCache(request).catch(() =>
-      caches.match(request).then((cached) => cached || Promise.reject(new Error("offline and uncached")))
-    )
-  );
+  // Everything else is code: prefer the network, fall back to cache.
+  event.respondWith(networkFirstWithTimeout(request));
 });
+
+/* How long to wait for the network before serving a cached copy instead.
+ *
+ * Plain network-first had no timeout at all: "offline" is a clean, fast
+ * rejection, but a weak mobile signal is not — fetch() can hang for tens of
+ * seconds before giving up. With several module requests in flight that left
+ * the game visibly half-loaded, which is the "does not load completely"
+ * report. A cached response after 3s beats a correct one after 30s, and the
+ * revalidation below still refreshes the cache in the background either way,
+ * so the next load is current. */
+const NETWORK_TIMEOUT_MS = 3000;
+
+function networkFirstWithTimeout(request) {
+  return caches.match(request).then((cached) => {
+    const network = fetchAndCache(request);
+    if (!cached) {
+      // Nothing to fall back to, so the network is the only answer — waiting
+      // is better than failing outright.
+      return network;
+    }
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = (response) => {
+        if (settled) return;
+        settled = true;
+        resolve(response);
+      };
+      const timer = setTimeout(() => settle(cached), NETWORK_TIMEOUT_MS);
+      network
+        .then((response) => {
+          clearTimeout(timer);
+          settle(response);
+        })
+        .catch(() => {
+          clearTimeout(timer);
+          settle(cached);
+        });
+    });
+  });
+}
 
 function fetchAndCache(request) {
   return fetch(request).then((response) => {

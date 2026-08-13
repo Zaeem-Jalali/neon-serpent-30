@@ -68,8 +68,19 @@ body {
   font-family: "Bahnschrift", "Trebuchet MS", "Verdana", sans-serif;
 }
 
-body {
-  overflow-x: hidden;
+/* The app owns the viewport rather than scrolling like a document — that
+   difference is most of what separates "a website with a long home page"
+   from something that reads as a game. Only the drawer and the level-select
+   dialog scroll, and each scrolls internally.
+   Scoped to .app-shell (index.html only) so privacy.html and terms.html,
+   which share this stylesheet, still scroll like ordinary documents. */
+body.app-shell {
+  overflow: hidden;
+  height: 100vh;
+  /* Dynamic viewport height accounts for mobile browser chrome that expands
+     and collapses on scroll; the 100vh above stays as the fallback. */
+  height: 100dvh;
+  overscroll-behavior: none;
 }
 
 button {
@@ -78,12 +89,45 @@ button {
   cursor: pointer;
 }
 
-.shell {
-  position: relative;
+/* ---------------------------------------------------------------------
+ * Screen system. Exactly one screen is active at a time; the others stay
+ * in the DOM (so the canvas is never destroyed and re-created) but are
+ * lifted out of the layout and made inert.
+ * ------------------------------------------------------------------ */
+.screen {
+  position: fixed;
+  inset: 0;
   z-index: 1;
-  width: min(1440px, calc(100vw - 24px));
-  margin: 0 auto;
-  padding: 18px 0 28px;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(1.02);
+  transition: opacity 0.42s ease, transform 0.42s ease, visibility 0s linear 0.42s;
+  pointer-events: none;
+}
+
+.screen.is-active {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+  transition: opacity 0.42s ease, transform 0.42s ease, visibility 0s;
+  pointer-events: auto;
+}
+
+/* Screens leaving toward the game recede rather than simply fading, which
+   reads as moving forward through the app instead of a page swap. */
+.screen.is-leaving {
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen,
+  .screen.is-active {
+    transition: opacity 0.15s linear, visibility 0s;
+    transform: none;
+  }
 }
 
 .glass {
@@ -91,15 +135,6 @@ button {
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
-}
-
-.topbar {
-  display: flex;
-  gap: 18px;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 18px 20px;
-  border-radius: 26px;
 }
 
 .eyebrow {
@@ -112,31 +147,395 @@ button {
 
 h1,
 h2,
-h3,
-.stat-pill strong {
+h3 {
   font-family: "Trebuchet MS", "Bahnschrift", sans-serif;
 }
 
-h1 {
+/* ---------------------------------------------------------------------
+ * Welcome screen
+ * ------------------------------------------------------------------ */
+.welcome-inner {
+  width: min(560px, 100%);
+  text-align: center;
+}
+
+/* Three segments and a core: the game's own vocabulary as a logo, chasing
+   in a loop so the first thing on screen is moving, not static. */
+.welcome-mark {
+  position: relative;
+  width: 132px;
+  height: 34px;
+  margin: 0 auto 28px;
+}
+
+.wm-seg,
+.wm-core {
+  position: absolute;
+  top: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+
+.wm-seg {
+  background: linear-gradient(135deg, var(--cyan), var(--mint));
+  box-shadow: 0 0 20px rgba(87, 248, 255, 0.4);
+  animation: wmChase 1.9s ease-in-out infinite;
+}
+
+.wm-1 { left: 0; }
+.wm-2 { left: 34px; animation-delay: 0.12s; }
+.wm-3 { left: 68px; animation-delay: 0.24s; }
+
+.wm-core {
+  left: 104px;
+  border-radius: 50%;
+  background: var(--c-food);
+  box-shadow: 0 0 24px var(--c-food);
+  animation: wmPulse 1.9s ease-in-out infinite;
+}
+
+@keyframes wmChase {
+  0%, 100% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(-9px) scale(1.06); }
+}
+
+@keyframes wmPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  45% { transform: scale(0.7); opacity: 0.65; }
+}
+
+.welcome-eyebrow {
+  margin-bottom: 10px;
+}
+
+.welcome-title {
   margin: 0;
-  font-size: clamp(2rem, 4vw, 4.4rem);
-  line-height: 0.95;
+  font-size: clamp(2.4rem, 11vw, 4.2rem);
+  line-height: 0.92;
   letter-spacing: -0.05em;
 }
 
-.subtitle {
-  max-width: 760px;
-  margin: 12px 0 0;
+.welcome-30 {
+  display: inline-block;
+  margin-left: 12px;
+  padding: 2px 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--cyan), var(--mint));
+  color: #04121c;
+  font-size: 0.42em;
+  vertical-align: middle;
+  letter-spacing: 0;
+}
+
+.welcome-greeting {
+  min-height: 3.2em;
+  margin: 20px auto 30px;
+  max-width: 420px;
   color: var(--muted);
-  font-size: 0.98rem;
+  font-size: 1.04rem;
+  line-height: 1.55;
+}
+
+.btn-hero {
+  position: relative;
+  padding: 17px 46px;
+  border-radius: 999px;
+  color: #03131c;
+  font-size: 1.06rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: linear-gradient(135deg, var(--cyan), var(--mint));
+  box-shadow: 0 14px 40px rgba(87, 248, 255, 0.32);
+  overflow: hidden;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.btn-hero::after {
+  /* Sheen sweep, so the primary call to action never sits completely
+     still on an otherwise dark screen. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.5) 50%, transparent 62%);
+  transform: translateX(-120%);
+  animation: heroSheen 3.4s ease-in-out infinite;
+}
+
+@keyframes heroSheen {
+  0%, 62% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+
+.btn-hero:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 48px rgba(87, 248, 255, 0.44);
+}
+
+.btn-hero:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.welcome-foot {
+  margin: 26px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  letter-spacing: 0.04em;
+}
+
+/* ---------------------------------------------------------------------
+ * Auth screen
+ * ------------------------------------------------------------------ */
+.auth-card {
+  position: relative;
+  width: min(430px, 100%);
+  padding: 34px 28px 26px;
+  border-radius: 30px;
+  background: linear-gradient(180deg, rgba(16, 27, 46, 0.96), rgba(9, 16, 30, 0.92));
+  border: 1px solid rgba(87, 248, 255, 0.2);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.auth-glow {
+  position: absolute;
+  top: -60%;
+  left: -20%;
+  width: 140%;
+  height: 120%;
+  background: radial-gradient(circle at 50% 50%, rgba(87, 248, 255, 0.16), transparent 62%);
+  pointer-events: none;
+}
+
+.auth-title {
+  margin: 0 0 10px;
+  font-size: 1.9rem;
+  letter-spacing: -0.02em;
+}
+
+.auth-sub {
+  margin: 0 0 26px;
+  color: var(--muted);
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
+.auth-actions {
+  display: grid;
+  gap: 11px;
+}
+
+.btn-auth {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  padding: 15px 18px;
+  border-radius: 16px;
+  color: var(--text);
+  font-size: 0.99rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.btn-auth:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(87, 248, 255, 0.42);
+}
+
+.btn-auth:active {
+  transform: translateY(0) scale(0.99);
+}
+
+.auth-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.auth-icon-guest {
+  color: var(--mint);
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.auth-skip {
+  display: block;
+  width: 100%;
+  margin-top: 18px;
+  padding: 10px;
+  background: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-skip:hover {
+  color: var(--cyan);
+}
+
+.auth-status {
+  min-height: 1.2em;
+  margin: 10px 0 0;
+  color: var(--amber);
+  font-size: 0.86rem;
+  text-align: center;
+}
+
+.auth-legal {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
   line-height: 1.5;
 }
 
-.top-actions {
+.auth-legal a {
+  color: var(--cyan);
+}
+
+/* ---------------------------------------------------------------------
+ * Game screen: a fixed bar, a flexible stage, controls pinned below.
+ * ------------------------------------------------------------------ */
+#gameScreen {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  place-items: stretch;
+  padding: 0;
+  gap: 0;
+}
+
+.game-bar {
+  display: flex;
+  align-items: center;
   gap: 10px;
-  justify-content: flex-end;
+  padding: 10px 12px;
+  padding-top: max(10px, env(safe-area-inset-top));
+  background: rgba(8, 15, 27, 0.82);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 13px;
+  color: var(--text);
+  font-size: 0.95rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  transition: transform 0.14s ease, background 0.14s ease, border-color 0.14s ease;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(87, 248, 255, 0.4);
+}
+
+.icon-btn:active {
+  transform: scale(0.93);
+}
+
+.burger {
+  display: grid;
+  gap: 4px;
+}
+
+.burger i {
+  display: block;
+  width: 17px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text);
+  transition: transform 0.26s ease, opacity 0.2s ease;
+}
+
+/* The burger becomes an X while the drawer is open — the control tells you
+   what it will do next, rather than needing a separate close affordance. */
+.nav-open .burger i:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+.nav-open .burger i:nth-child(2) { opacity: 0; }
+.nav-open .burger i:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+.hud-strip {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+}
+
+.hud-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.hud-cell span {
+  color: var(--muted);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.hud-cell strong {
+  font-family: "Trebuchet MS", "Bahnschrift", sans-serif;
+  font-size: 1.02rem;
+  line-height: 1.15;
+}
+
+/* Score changing is worth a beat of feedback — it is the number the whole
+   session is about. Class is added and removed from main.js. */
+.hud-cell strong.bump {
+  animation: hudBump 0.32s ease;
+}
+
+@keyframes hudBump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.22); color: var(--mint); }
+  100% { transform: scale(1); }
+}
+
+.bar-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+.stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+.mission-ticker {
+  margin: 0;
+  max-width: 640px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  text-align: center;
+  line-height: 1.4;
+  flex: none;
 }
 
 .chip,
@@ -171,63 +570,29 @@ h1 {
   border-color: rgba(255, 93, 118, 0.3);
 }
 
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.9fr);
-  gap: 18px;
-  margin-top: 18px;
-}
-
-.arena,
-.sidebar {
-  min-width: 0;
-}
-
-.arena {
-  padding: 16px;
-  border-radius: 28px;
-}
-
-.arena-header {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.stat-pill {
-  padding: 12px 14px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.stat-pill span {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
-.stat-pill strong {
-  font-size: 1.08rem;
-}
-
+/* The board sizes itself to whatever space the bar and pad leave over,
+   capped by the 3:2 grid aspect so it never distorts. min-height:0 on the
+   flex parents is what actually lets it shrink on short screens instead of
+   overflowing them. */
 .canvas-shell {
   position: relative;
-  border-radius: 24px;
+  width: 100%;
+  max-width: min(100%, calc((100vh - 210px) * 1.5));
+  max-width: min(100%, calc((100dvh - 210px) * 1.5));
+  aspect-ratio: 15 / 10;
+  border-radius: 22px;
   overflow: hidden;
   background:
     radial-gradient(circle at 50% 20%, rgba(87, 248, 255, 0.08), transparent 40%),
     linear-gradient(180deg, rgba(6, 11, 20, 0.95), rgba(9, 15, 29, 0.98));
   border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
 }
 
 canvas {
   display: block;
   width: 100%;
-  height: min(72vh, 760px);
-  aspect-ratio: 15 / 10;
+  height: 100%;
   image-rendering: pixelated;
   /* Let the canvas own every touch gesture so swipe-to-steer never scrolls the page. */
   touch-action: none;
@@ -238,6 +603,9 @@ canvas {
 .overlay {
   position: absolute;
   inset: 0;
+  /* Above the sticky d-pad (z-index 5, see the tablet/mobile media query)
+     so its buttons are never trapped underneath the pad on small screens. */
+  z-index: 6;
   display: grid;
   place-items: center;
   padding: 18px;
@@ -310,45 +678,301 @@ canvas {
 .touch-controls {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  width: min(260px, 100%);
-  margin: 14px auto 0;
+  gap: 9px;
+  width: min(232px, 72vw);
+  margin: 0 auto;
+  flex: none;
+  transition: opacity 0.2s ease;
+}
+
+/* Nothing to steer while the start/pause/game-over card is up, and the pad
+   showing through it just muddies the screen. */
+.stage:has(.overlay.visible) .touch-controls {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .pad-btn {
-  min-height: 56px;
+  min-height: 52px;
   color: var(--text);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 1.1rem;
+  font-size: 1.05rem;
+  /* Kills the ~300ms tap delay and the grey flash some mobile browsers add,
+     which is felt directly as input lag on the d-pad. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.sidebar {
+.pad-btn:active {
+  background: rgba(87, 248, 255, 0.22);
+  border-color: rgba(87, 248, 255, 0.5);
+  transform: scale(0.94);
+}
+
+/* A keyboard-and-mouse player never needs the pad; hiding it there buys the
+   board more height. Any touch device keeps it. */
+@media (hover: hover) and (pointer: fine) {
+  .touch-controls { display: none; }
+}
+
+/* ---------------------------------------------------------------------
+ * Drawer. Everything that used to live in a long right-hand sidebar now
+ * lives here behind one control, split across three tabs — which is the
+ * actual fix for "too many headers at the start of the game".
+ * ------------------------------------------------------------------ */
+.nav-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  background: rgba(3, 7, 14, 0.6);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0s linear 0.3s;
+}
+
+.nav-open .nav-scrim {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.3s ease, visibility 0s;
+}
+
+.nav-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  width: min(390px, 88vw);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, rgba(13, 22, 38, 0.99), rgba(8, 14, 26, 0.99));
+  border-left: 1px solid var(--line);
+  box-shadow: -30px 0 70px rgba(0, 0, 0, 0.5);
+  transform: translateX(100%);
+  transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  visibility: hidden;
+}
+
+.nav-open .nav-drawer {
+  transform: translateX(0);
+  visibility: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-drawer { transition: transform 0.15s linear; }
+}
+
+.drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 12px;
+  padding-top: max(16px, env(safe-area-inset-top));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  flex: none;
+}
+
+.drawer-who {
+  margin: 0;
+  font-family: "Trebuchet MS", "Bahnschrift", sans-serif;
+  font-size: 1.05rem;
+}
+
+.drawer-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 12px 16px;
+  flex: none;
+}
+
+.drawer-tab {
+  flex: 1;
+  padding: 10px 8px;
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.drawer-tab.active {
+  color: var(--text);
+  background: linear-gradient(135deg, rgba(87, 248, 255, 0.24), rgba(99, 255, 149, 0.16));
+  border-color: rgba(87, 248, 255, 0.4);
+}
+
+.drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 16px 24px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.is-active {
   display: grid;
-  gap: 14px;
+  gap: 12px;
+  /* Panels rise in as their tab is selected, so switching tabs reads as a
+     transition rather than an instant swap. */
+  animation: tabIn 0.26s ease;
 }
 
-.panel {
-  padding: 18px;
-  border-radius: 24px;
+@keyframes tabIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.panel h3 {
+@media (prefers-reduced-motion: reduce) {
+  .tab-panel.is-active { animation: none; }
+}
+
+.d-card {
+  padding: 15px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.d-card h3 {
   margin: 0 0 10px;
   color: var(--cyan);
-  letter-spacing: 0.04em;
+  font-size: 0.94rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.panel-title {
+.d-title {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.22rem;
   font-weight: 700;
 }
 
-.panel-copy {
+.d-copy {
   margin: 8px 0 0;
   color: var(--muted);
   line-height: 1.5;
+  font-size: 0.92rem;
+}
+
+.mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mode-btn {
+  padding: 13px 10px;
+  border-radius: 14px;
+  color: var(--muted);
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.mode-btn.active {
+  color: var(--text);
+  background: linear-gradient(135deg, rgba(87, 248, 255, 0.24), rgba(99, 255, 149, 0.16));
+  border-color: rgba(87, 248, 255, 0.4);
+}
+
+.drawer-cta {
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  color: var(--text);
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.drawer-cta:hover {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(87, 248, 255, 0.4);
+}
+
+.drawer-cta:active {
+  transform: scale(0.985);
+}
+
+.drawer-cta.danger {
+  background: rgba(255, 93, 118, 0.14);
+  border-color: rgba(255, 93, 118, 0.3);
+}
+
+.hud-inline {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.hud-inline strong {
+  color: var(--text);
+}
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  color: #04121c;
+  background: linear-gradient(135deg, var(--cyan), var(--mint));
+}
+
+.profile-meta {
+  min-width: 0;
+}
+
+.profile-name {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1.02rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-meta .mini-note {
+  margin-top: 2px;
+}
+
+.drawer-legal {
+  margin: 4px 0 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.drawer-legal a {
+  color: var(--muted);
+}
+
+.drawer-legal a:hover {
+  color: var(--cyan);
 }
 
 .modifier-list {
@@ -450,16 +1074,63 @@ canvas {
   word-break: break-word;
 }
 
+.code-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.code-actions .secondary {
+  margin: 0;
+}
+
+.skin-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.skin-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  flex: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 0 14px rgba(0, 0, 0, 0.3);
+}
+
+.skin-name {
+  font-weight: 700;
+}
+
+.skin-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.skin-actions .secondary {
+  margin: 0;
+}
+
+#dailyHistoryList li {
+  grid-template-columns: 2.6rem minmax(0, 1fr) auto;
+}
+
+#dailyHistoryList .lb-rank {
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
 .score-row strong {
   color: var(--text);
 }
 
 .is-hidden {
   display: none !important;
-}
-
-.pad-note {
-  text-align: center;
 }
 
 .lb-tabs {
@@ -833,51 +1504,146 @@ canvas {
   mask-image: radial-gradient(circle at center, black 34%, transparent 96%);
 }
 
-@media (max-width: 1180px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
+/* ---------------------------------------------------------------------
+ * Fullscreen. The Fullscreen API only makes the element fill the screen —
+ * the layout still has to be told to use that space, which is what these
+ * rules do. Requested on the game screen specifically rather than <body>
+ * so the drawer and dialog (both fixed, both outside it) keep working.
+ * ------------------------------------------------------------------ */
+#gameScreen:fullscreen {
+  background: linear-gradient(160deg, #050a12, #091a2a 48%, #050b12);
+}
 
-  canvas {
-    height: min(62vh, 660px);
+#gameScreen:fullscreen .canvas-shell {
+  max-width: min(100%, calc((100vh - 190px) * 1.5));
+}
+
+/* Portrait phones get the most out of fullscreen, which is exactly the
+   "play vertically with ease" case: no browser chrome, so the board can
+   take the height the URL bar was using. */
+@media (orientation: portrait) and (max-width: 820px) {
+  .canvas-shell {
+    max-width: min(100%, calc((100dvh - 250px) * 1.5));
   }
 }
 
-@media (max-width: 760px) {
-  .shell {
-    width: min(100vw - 14px, 100%);
-    padding-top: 8px;
-  }
+/* Short viewports (landscape phones): trim the chrome so the board still
+   gets a usable share of the height. */
+@media (max-height: 560px) {
+  .game-bar { padding: 6px 10px; }
+  .icon-btn { width: 36px; height: 36px; }
+  .hud-cell { padding: 2px 9px; }
+  .hud-cell strong { font-size: 0.9rem; }
+  .stage { padding: 8px; gap: 6px; }
+  .pad-btn { min-height: 42px; }
+  .touch-controls { width: min(190px, 60vw); gap: 7px; }
+  .mission-ticker { display: none; }
+}
 
-  .topbar {
-    padding: 16px;
+@media (max-width: 420px) {
+  .hud-cell { padding: 3px 8px; }
+  .hud-cell span { font-size: 0.56rem; }
+  .hud-cell strong { font-size: 0.92rem; }
+  .legend-grid { grid-template-columns: 1fr; }
+}
+
+/* ---------------------------------------------------------------------
+ * Long-form legal pages (privacy.html, terms.html). The panel/glass system
+ * above is tuned for short UI copy, not multi-page prose, so this adds just
+ * enough on top: a readable measure, spaced headings, a back link. Kept in
+ * the shared stylesheet rather than inline because the CSP has no
+ * 'unsafe-inline' in style-src (see netlify.toml).
+ * ------------------------------------------------------------------ */
+.legal-shell {
+  width: min(760px, calc(100vw - 24px));
+  margin: 0 auto;
+  padding: 32px 0 60px;
+}
+
+.legal-back {
+  display: inline-block;
+  margin-bottom: 18px;
+  color: var(--cyan);
+  text-decoration: none;
+  font-size: 0.92rem;
+}
+
+.legal-back:hover {
+  text-decoration: underline;
+}
+
+.legal-doc {
+  padding: 28px clamp(18px, 4vw, 40px) 40px;
+  border-radius: 28px;
+}
+
+.legal-doc h1 {
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  margin: 0 0 6px;
+}
+
+.legal-updated {
+  color: var(--muted);
+  font-size: 0.88rem;
+  margin: 0 0 28px;
+}
+
+.legal-doc h2 {
+  font-size: 1.25rem;
+  color: var(--cyan);
+  margin: 32px 0 10px;
+  letter-spacing: 0.02em;
+}
+
+.legal-doc h2:first-of-type {
+  margin-top: 0;
+}
+
+.legal-doc p,
+.legal-doc li {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.legal-doc strong {
+  color: var(--text);
+}
+
+.legal-doc ul,
+.legal-doc ol {
+  margin: 10px 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 6px;
+}
+
+.legal-doc a {
+  color: var(--cyan);
+}
+
+.legal-callout {
+  margin: 0 0 28px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 213, 106, 0.08);
+  border: 1px solid rgba(255, 213, 106, 0.28);
+  color: var(--text);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.legal-links {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .legal-doc {
+    padding: 22px 18px 32px;
     border-radius: 20px;
-    flex-direction: column;
-  }
-
-  .top-actions {
-    justify-content: flex-start;
-  }
-
-  .arena {
-    padding: 12px;
-    border-radius: 20px;
-  }
-
-  .arena-header {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .top-actions .chip {
-    padding: 10px 13px;
-    font-size: 0.9rem;
-  }
-
-  canvas {
-    height: min(56vh, 500px);
-  }
-
-  .legend-grid {
-    grid-template-columns: 1fr;
   }
 }

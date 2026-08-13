@@ -17,6 +17,20 @@ import {
   rivalMovesPerSec
 } from "./levels.js";
 import { clamp, key, mulberry32, hashSeed } from "./utils.js";
+import { isSupabaseConfigured } from "./supabaseConfig.js";
+import {
+  onAuthChange,
+  getCurrentUser,
+  restoreSession,
+  signInWithGoogle,
+  signInAsGuest,
+  signOutCloud,
+  setCloudDisplayName,
+  syncLevelProgress,
+  fetchCloudLevelProgress,
+  postRunToCloud,
+  fetchCloudLeaderboard
+} from "./cloudSync.js";
 
 /* ---------------------------------------------------------------------
  * Engine wiring
@@ -45,6 +59,8 @@ const state = Object.assign(engine.state, {
   viewHeight: 640,
   pixelRatio: 1,
   palette: "neon",
+  skinIndex: 0,
+  dailyHistory: [],
   soundEnabled: true,
   playerName: "",
   savedCheckpoint: null,
@@ -111,16 +127,26 @@ function handleEngineEvent(type, payload) {
   }
 }
 
+/* The pause control is an icon button in the game bar now, so it carries a
+   glyph rather than the words "Pause"/"Resume", which would overflow a 42px
+   square. The accessible name still says which it is. */
+function setPauseButton(paused) {
+  pauseBtn.textContent = paused ? "▶" : "❚❚";
+  pauseBtn.setAttribute("aria-label", paused ? "Resume" : "Pause");
+}
+
 function onLifeLost({ reason, lives }) {
   overlayKicker.textContent = "Life lost";
+  if (overlayTitle) overlayTitle.textContent = "Shake it off";
   overlay.classList.add("visible");
   overlayText.textContent = `${reason}. You have ${lives} lives left. Tap resume or press play to continue from this stage.`;
-  pauseBtn.textContent = "Resume";
+  setPauseButton(true);
   playBtn.textContent = "Resume";
 }
 
 function onGameOver({ reason, score, levelReached, checkpoint }) {
   overlayKicker.textContent = "Game over";
+  if (overlayTitle) overlayTitle.textContent = "The grid wins this one";
   overlay.classList.add("visible");
 
   const note = checkpoint && checkpoint.level > 0
@@ -131,11 +157,13 @@ function onGameOver({ reason, score, levelReached, checkpoint }) {
 
   updateBestDisplay();
   refreshCheckpointButton();
+  recordDailyRun(score, levelReached);
   submitRun(levelReached);
 }
 
 function onVictory({ score, levelReached }) {
   overlayKicker.textContent = "Victory";
+  if (overlayTitle) overlayTitle.textContent = "All 30 cleared";
   overlay.classList.add("visible");
   overlayText.textContent = `You cleared all 30 levels with a score of ${formatNumber(score)}. That run belongs on the leaderboard.`;
   playBtn.textContent = "Play Again";
@@ -143,6 +171,7 @@ function onVictory({ score, levelReached }) {
 
   updateBestDisplay();
   refreshCheckpointButton();
+  recordDailyRun(score, levelReached);
   submitRun(levelReached);
 }
 
@@ -175,8 +204,49 @@ function onVictory({ score, levelReached }) {
   const playBtn = document.getElementById("playBtn");
   const copyCodeBtn = document.getElementById("copyCodeBtn");
   const dailyCopyBtn = document.getElementById("dailyCopyBtn");
+  const shareBtn = document.getElementById("shareBtn");
+  const shareCodeBtn = document.getElementById("shareCodeBtn");
   const soundBtn = document.getElementById("soundBtn");
   const paletteBtn = document.getElementById("paletteBtn");
+  const skinSwatch = document.getElementById("skinSwatch");
+  const skinName = document.getElementById("skinName");
+  const skinShuffleBtn = document.getElementById("skinShuffleBtn");
+  const skinResetBtn = document.getElementById("skinResetBtn");
+  const dailyHistoryList = document.getElementById("dailyHistoryList");
+
+  // Screens, drawer and the rest of the app shell.
+  const welcomeScreen = document.getElementById("welcomeScreen");
+  const welcomeGreeting = document.getElementById("welcomeGreeting");
+  const enterBtn = document.getElementById("enterBtn");
+  const authScreen = document.getElementById("authScreen");
+  const authGoogleBtn = document.getElementById("authGoogleBtn");
+  const authGuestBtn = document.getElementById("authGuestBtn");
+  const authSkipBtn = document.getElementById("authSkipBtn");
+  const authStatus = document.getElementById("authStatus");
+  const gameScreen = document.getElementById("gameScreen");
+  const navToggle = document.getElementById("navToggle");
+  const navDrawer = document.getElementById("navDrawer");
+  const navScrim = document.getElementById("navScrim");
+  const navClose = document.getElementById("navClose");
+  const drawerWho = document.getElementById("drawerWho");
+  const profileAvatar = document.getElementById("profileAvatar");
+  const profileName = document.getElementById("profileName");
+  const fullscreenBtn = document.getElementById("fullscreenBtn");
+  const fullscreenBtn2 = document.getElementById("fullscreenBtn2");
+  const missionTicker = document.getElementById("missionTicker");
+  const overlayTitle = document.getElementById("overlayTitle");
+  const drawerTabs = [
+    { btn: document.getElementById("tabPlayBtn"), panel: document.getElementById("tabPlay") },
+    { btn: document.getElementById("tabStatsBtn"), panel: document.getElementById("tabStats") },
+    { btn: document.getElementById("tabSettingsBtn"), panel: document.getElementById("tabSettings") }
+  ];
+
+  const accountPanel = document.getElementById("accountPanel");
+  const accountStatus = document.getElementById("accountStatus");
+  const accountActions = document.getElementById("accountActions");
+  const signInGoogleBtn = document.getElementById("signInGoogleBtn");
+  const signInGuestBtn = document.getElementById("signInGuestBtn");
+  const signOutBtn = document.getElementById("signOutBtn");
   const checkpointBtn = document.getElementById("checkpointBtn");
   const leaderboardList = document.getElementById("leaderboardList");
   const lbCampaignTab = document.getElementById("lbCampaignTab");
@@ -258,6 +328,61 @@ function onVictory({ score, levelReached }) {
     document.body.classList.toggle("palette-accessible", paletteName === "accessible");
     paletteBtn.textContent = paletteName === "accessible" ? "Colourblind-safe" : "Neon palette";
     paletteBtn.setAttribute("aria-pressed", paletteName === "accessible" ? "true" : "false");
+    // The "Default" skin has no colours of its own — it mirrors whichever
+    // palette is active — so switching palettes must refresh its swatch too.
+    if (state.skinIndex === 0) applySkin(0);
+  }
+
+  /* Cosmetic snake skins, layered on top of whichever palette is active.
+   * Index 0 always means "use the active palette's own snake colours" —
+   * shuffle never lands there, so Shuffle always visibly changes something,
+   * and Reset always has one unambiguous colour to return to. Deliberately
+   * separate from PALETTES: food/hazard/portal colours carry accessibility
+   * meaning and must stay tied to the palette, but the snake's own body is
+   * pure decoration, so it is safe to let players pick it independently. */
+  const SKINS = [
+    { name: "Default", colors: null, glow: null },
+    { name: "Solar", colors: ["#ffd56a", "#ff6bd6"], glow: "rgba(255, 213, 106, 0.35)" },
+    { name: "Venom", colors: ["#63ff95", "#009e73"], glow: "rgba(99, 255, 149, 0.35)" },
+    { name: "Ice", colors: ["#bfeeff", "#57f8ff"], glow: "rgba(191, 238, 255, 0.35)" },
+    { name: "Ember", colors: ["#ff5d76", "#ffd56a"], glow: "rgba(255, 93, 118, 0.35)" },
+    { name: "Violet", colors: ["#a98bff", "#ff6bd6"], glow: "rgba(169, 139, 255, 0.35)" },
+    { name: "Mono", colors: ["#f2f6fa", "#9db3c8"], glow: "rgba(242, 246, 250, 0.3)" }
+  ];
+
+  function activeSnakeColors() {
+    const skin = SKINS[state.skinIndex] || SKINS[0];
+    return skin.colors || COLORS.snake;
+  }
+
+  function activeSnakeGlow() {
+    const skin = SKINS[state.skinIndex] || SKINS[0];
+    return skin.glow || COLORS.snakeGlow;
+  }
+
+  function applySkin(index) {
+    const clamped = SKINS[index] ? index : 0;
+    state.skinIndex = clamped;
+    const skin = SKINS[clamped];
+    const colors = skin.colors || COLORS.snake;
+    skinSwatch.style.background = `linear-gradient(135deg, ${colors[0]}, ${colors[1]})`;
+    skinName.textContent = skin.name;
+  }
+
+  function shuffleSkin() {
+    // Skip index 0 (Default) so Shuffle always produces a visible change,
+    // and skip the current skin so repeated taps never look like a no-op.
+    const pool = SKINS.map((_, i) => i).filter((i) => i !== 0 && i !== state.skinIndex);
+    const next = pool[Math.floor(Math.random() * pool.length)];
+    applySkin(next);
+    savePreferences();
+    audio.play("ui");
+  }
+
+  function resetSkin() {
+    applySkin(0);
+    savePreferences();
+    audio.play("ui");
   }
 
   /* ---------------------------------------------------------------------
@@ -429,10 +554,131 @@ function onVictory({ score, levelReached }) {
 
 
   /* ------------------------------------------------------------------
+   * App shell: screens, drawer, fullscreen.
+   *
+   * The game used to be one long scrolling page with every panel stacked
+   * down the right. Now it is three screens (welcome -> auth -> game) with
+   * everything else behind a single drawer, which is what makes it read as
+   * an app rather than a document.
+   * --------------------------------------------------------------- */
+  const SCREENS = { welcome: welcomeScreen, auth: authScreen, game: gameScreen };
+  let activeScreen = "welcome";
+
+  function showScreen(name) {
+    const next = SCREENS[name];
+    if (!next || activeScreen === name) return;
+    const current = SCREENS[activeScreen];
+    if (current) {
+      current.classList.add("is-leaving");
+      current.classList.remove("is-active");
+      setTimeout(() => current.classList.remove("is-leaving"), 450);
+    }
+    next.classList.add("is-active");
+    activeScreen = name;
+    // The canvas has no layout while its screen is hidden, so it must be
+    // re-measured once the game screen is actually on-screen — otherwise it
+    // keeps whatever size it had (often none) and draws blank.
+    if (name === "game") requestAnimationFrame(resizeCanvas);
+  }
+
+  /* Rotating welcome lines. Deliberately a bit cocky — the game is hard,
+     and the greeting sets expectations while being fun about it. */
+  const GREETINGS = [
+    "30 levels. 4 bosses. Roughly 400 chances to blame the controls.",
+    "The snake gets longer. The room gets smaller. Good luck with that.",
+    "Somewhere in here is a rival snake that has never heard of mercy.",
+    "Rule one: don't bite yourself. You'd be amazed how often rule one loses.",
+    "Every level is handmade. Every death is entirely your own work.",
+    "Fair warning: tier four moves faster than your good intentions.",
+    "You've played snake before. You have not played this snake before.",
+    "The grid is patient. The drones are not. Let's begin.",
+    "Deep breath. The first eight levels are the friendly ones.",
+    "Yes, the arena closes in. No, it will not wait for you."
+  ];
+
+  function pickGreeting() {
+    welcomeGreeting.textContent = GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
+  }
+
+  function openDrawer() {
+    document.body.classList.add("nav-open");
+    navDrawer.setAttribute("aria-hidden", "false");
+    navToggle.setAttribute("aria-expanded", "true");
+    // A run should not keep going behind a menu the player is reading.
+    if (state.running && !state.paused && !state.over && !state.won) togglePause();
+  }
+
+  function closeDrawer() {
+    document.body.classList.remove("nav-open");
+    navDrawer.setAttribute("aria-hidden", "true");
+    navToggle.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleDrawer() {
+    audio.play("ui");
+    if (document.body.classList.contains("nav-open")) closeDrawer();
+    else openDrawer();
+  }
+
+  function selectTab(index) {
+    drawerTabs.forEach((tab, i) => {
+      const on = i === index;
+      tab.btn.classList.toggle("active", on);
+      tab.btn.setAttribute("aria-selected", on ? "true" : "false");
+      tab.panel.classList.toggle("is-active", on);
+    });
+    audio.play("ui");
+  }
+
+  function isFullscreen() {
+    return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  /* Requested on the game screen rather than <body> so the drawer and the
+     level-select dialog — both fixed-position siblings — stay usable.
+     Prefixed calls are for older iOS Safari, which is also the platform
+     most likely to actually want this. */
+  function toggleFullscreen() {
+    audio.play("ui");
+    if (isFullscreen()) {
+      (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document);
+      return;
+    }
+    const el = gameScreen;
+    const request = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!request) {
+      // iOS Safari on iPhone has no Fullscreen API at all; installing the
+      // PWA to the home screen is the real fullscreen route there.
+      authStatus.textContent = "";
+      return;
+    }
+    request.call(el).catch(() => {});
+  }
+
+  // Entering or leaving fullscreen changes the canvas box without firing a
+  // window resize on every browser, so re-measure explicitly.
+  document.addEventListener("fullscreenchange", () => requestAnimationFrame(resizeCanvas));
+  document.addEventListener("webkitfullscreenchange", () => requestAnimationFrame(resizeCanvas));
+
+  function updateProfileUI(user) {
+    const name = state.playerName || (user && !user.is_anonymous ? "Signed in" : "Guest");
+    drawerWho.textContent = user
+      ? (user.is_anonymous ? `${name} · guest` : name)
+      : "Playing locally";
+    profileName.textContent = name;
+    profileAvatar.textContent = (state.playerName || "?").trim().charAt(0).toUpperCase() || "◉";
+  }
+
+  /* ------------------------------------------------------------------
    * Bootstrap: restore preferences, wire input, then start the loop.
    * --------------------------------------------------------------- */
   loadSave();
   applyPalette(state.palette);
+  applySkin(state.skinIndex);
+  renderDailyHistory();
+  pickGreeting();
+  updateProfileUI(null);
+  initAccountUI();
   soundBtn.textContent = state.soundEnabled === false ? "Sound off" : "Sound on";
   audio.enabled = state.soundEnabled !== false;
   soundBtn.setAttribute("aria-pressed", audio.enabled ? "true" : "false");
@@ -441,6 +687,27 @@ function onVictory({ score, levelReached }) {
   updateBestDisplay();
   resizeCanvas();
   window.addEventListener("resize", resizeCanvas);
+
+  /* The canvas resizes for reasons that never fire a window resize event:
+     the overlay opening and closing, panels changing height, a phone's URL
+     bar collapsing, entering fullscreen, the drawer sliding over it. Those
+     left the backing store at its old size while CSS scaled the element —
+     a stretched or blank board until something else happened to trigger a
+     resize. Observing the element itself covers every one of those cases. */
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(() => resizeCanvas()).observe(canvas);
+  }
+
+  /* Coming back from a hidden tab: drop the stale timestamp so the next
+     frame measures from now rather than from whenever the tab was last
+     visible, and re-measure the canvas, which some mobile browsers resize
+     while backgrounded. Pairs with MAX_FRAME_DELTA_MS in loop(). */
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    state.lastTime = 0;
+    state.accumulator = 0;
+    resizeCanvas();
+  });
   window.addEventListener("keydown", onKeyDown);
   setupSwipeControls();
 
@@ -467,9 +734,79 @@ function onVictory({ score, levelReached }) {
   });
   copyCodeBtn.addEventListener("click", copyChallengeCode);
   dailyCopyBtn.addEventListener("click", copyChallengeCode);
+  shareBtn.addEventListener("click", shareGame);
+  shareCodeBtn.addEventListener("click", shareGame);
   checkpointBtn.addEventListener("click", resumeFromCheckpoint);
   soundBtn.addEventListener("click", toggleSound);
   paletteBtn.addEventListener("click", togglePalette);
+  skinShuffleBtn.addEventListener("click", shuffleSkin);
+  skinResetBtn.addEventListener("click", resetSkin);
+
+  /* ---- app shell wiring ---- */
+  enterBtn.addEventListener("click", () => {
+    audio.init();
+    audio.play("ui");
+    // Someone with a session already does not need to be asked again.
+    showScreen(isSupabaseConfigured && !getCurrentUser() ? "auth" : "game");
+  });
+
+  authGoogleBtn.addEventListener("click", async () => {
+    audio.play("ui");
+    authStatus.textContent = "Redirecting to Google…";
+    const { error } = await signInWithGoogle();
+    if (error) authStatus.textContent = `Could not start Google sign-in: ${error}`;
+  });
+
+  authGuestBtn.addEventListener("click", async () => {
+    audio.play("ui");
+    authStatus.textContent = "Signing in…";
+    const { error } = await signInAsGuest();
+    if (error) {
+      authStatus.textContent = `Could not sign in: ${error}`;
+      return;
+    }
+    showScreen("game");
+  });
+
+  authSkipBtn.addEventListener("click", () => {
+    audio.play("ui");
+    showScreen("game");
+  });
+
+  navToggle.addEventListener("click", toggleDrawer);
+  navClose.addEventListener("click", () => {
+    audio.play("ui");
+    closeDrawer();
+  });
+  navScrim.addEventListener("click", closeDrawer);
+  drawerTabs.forEach((tab, i) => tab.btn.addEventListener("click", () => selectTab(i)));
+
+  fullscreenBtn.addEventListener("click", toggleFullscreen);
+  fullscreenBtn2.addEventListener("click", toggleFullscreen);
+
+  // Choosing a level or restarting from inside the drawer should hand the
+  // player straight back to the board rather than leaving the menu open
+  // over the thing they just asked to see.
+  levelsBtn.addEventListener("click", closeDrawer);
+  restartBtn.addEventListener("click", closeDrawer);
+  campaignBtn.addEventListener("click", closeDrawer);
+  dailyBtn.addEventListener("click", closeDrawer);
+  signInGoogleBtn.addEventListener("click", async () => {
+    audio.play("ui");
+    accountStatus.textContent = "Redirecting to Google…";
+    const { error } = await signInWithGoogle();
+    if (error) accountStatus.textContent = `Could not start Google sign-in: ${error}`;
+  });
+  signInGuestBtn.addEventListener("click", async () => {
+    audio.play("ui");
+    accountStatus.textContent = "Signing in…";
+    const { error } = await signInAsGuest();
+    if (error) accountStatus.textContent = `Could not sign in: ${error}`;
+  });
+  signOutBtn.addEventListener("click", async () => {
+    audio.play("ui");
+    await signOutCloud();
+  });
   saveNameBtn.addEventListener("click", savePlayerName);
   playerNameInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") savePlayerName();
@@ -604,7 +941,7 @@ function onVictory({ score, levelReached }) {
 
     const num = document.createElement("span");
     num.className = "ls-num";
-    num.textContent = level.boss ? `⛨ Level ${levelIndex + 1}` : `Level ${levelIndex + 1}`;
+    num.textContent = level.boss ? `☠ Level ${levelIndex + 1}` : `Level ${levelIndex + 1}`;
 
     const badge = document.createElement("span");
     badge.className = "ls-badge";
@@ -674,7 +1011,7 @@ function onVictory({ score, levelReached }) {
     state.paused = false;
     overlay.classList.remove("visible");
     overlayKicker.textContent = "Live run";
-    pauseBtn.textContent = "Pause";
+    setPauseButton(false);
     playBtn.textContent = "Start Game";
     state.message = levelIndex === 0
       ? "Good luck. Stay in motion."
@@ -692,6 +1029,7 @@ function onVictory({ score, levelReached }) {
     if (levelIndex + 1 < LEVELS.length) {
       state.unlockedLevel = Math.max(state.unlockedLevel, levelIndex + 1);
     }
+    if (getCurrentUser()) syncLevelProgress(state.levelStats);
   }
 
   function isPracticeRun() {
@@ -772,7 +1110,7 @@ function onVictory({ score, levelReached }) {
     state.paused = false;
     overlayKicker.textContent = "Live run";
     overlay.classList.remove("visible");
-    pauseBtn.textContent = "Pause";
+    setPauseButton(false);
     playBtn.textContent = "Start Game";
     state.message = "Good luck. Stay in motion.";
     updateUI();
@@ -782,7 +1120,7 @@ function onVictory({ score, levelReached }) {
     state.paused = false;
     overlayKicker.textContent = "Live run";
     overlay.classList.remove("visible");
-    pauseBtn.textContent = "Pause";
+    setPauseButton(false);
     playBtn.textContent = "Start Game";
     overlayText.textContent = "Collect neon cores, dodge drones, survive portals, and clear all 30 levels.";
     state.message = "Run resumed.";
@@ -816,7 +1154,7 @@ function onVictory({ score, levelReached }) {
     state.over = false;
     state.won = false;
     overlay.classList.remove("visible");
-    pauseBtn.textContent = "Pause";
+    setPauseButton(false);
     updateUI();
   }
 
@@ -846,7 +1184,7 @@ function onVictory({ score, levelReached }) {
     loadLevel(cp.level || 0);
     overlay.classList.remove("visible");
     overlayKicker.textContent = "Live run";
-    pauseBtn.textContent = "Pause";
+    setPauseButton(false);
     playBtn.textContent = "Start Game";
     state.message = `Resumed at level ${(cp.level || 0) + 1}.`;
     refreshCheckpointButton();
@@ -943,7 +1281,7 @@ function onVictory({ score, levelReached }) {
   function togglePause() {
     if (!state.running || state.over || state.won) return;
     state.paused = !state.paused;
-    pauseBtn.textContent = state.paused ? "Resume" : "Pause";
+    setPauseButton(state.paused);
     overlayKicker.textContent = state.paused ? "Paused" : "Live run";
     overlay.classList.toggle("visible", state.paused);
     overlayText.textContent = state.paused ? "Game paused. Resume when you’re ready." : "Collect neon cores, dodge drones, survive portals, and clear all 30 levels.";
@@ -989,9 +1327,22 @@ function onVictory({ score, levelReached }) {
     state.floating.push({ text: "+", x, y, color, life: 18 });
   }
 
+  /* Longest frame gap the fixed-step catch-up below will honour.
+   *
+   * requestAnimationFrame stops firing while a tab is hidden (switching
+   * apps on a phone, locking the screen, answering a message), so the first
+   * frame back can report a gap of many seconds. Feeding that straight into
+   * the accumulator ran hundreds of simulation steps inside a single frame:
+   * the page locked up for a beat and the snake effectively teleported —
+   * usually into a wall. That is the "jams / loses visibility after a game"
+   * report. Clamping to ~4 frames keeps genuine catch-up for an ordinary
+   * dropped frame while making a long absence a pause rather than a
+   * fast-forward. */
+  const MAX_FRAME_DELTA_MS = 64;
+
   function loop(timestamp) {
     if (!state.lastTime) state.lastTime = timestamp;
-    const dt = timestamp - state.lastTime;
+    const dt = Math.min(timestamp - state.lastTime, MAX_FRAME_DELTA_MS);
     state.lastTime = timestamp;
 
     if (state.running && !state.paused && !state.over && !state.won) {
@@ -1004,8 +1355,31 @@ function onVictory({ score, levelReached }) {
     }
 
     updateFloating(dt);
+    syncCanvasSize();
     draw();
     requestAnimationFrame(loop);
+  }
+
+  /* Safety net for the canvas backing store.
+   *
+   * ResizeObserver handles this properly and covers the cases a window
+   * resize event misses (overlay opening, drawer sliding, fullscreen, a
+   * phone's URL bar collapsing). This is the belt to that braces: if the
+   * observer is unsupported, throttled, or simply never delivers, a stale
+   * backing store means a blank or stretched board with no way to recover
+   * short of another resize — which is exactly the failure being fixed.
+   * Checked a few times a second rather than every frame, since reading
+   * layout forces a reflow. */
+  let sizeCheckCountdown = 0;
+
+  function syncCanvasSize() {
+    if (--sizeCheckCountdown > 0) return;
+    sizeCheckCountdown = 30;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    if (Math.abs(rect.width - state.viewWidth) > 1 || Math.abs(rect.height - state.viewHeight) > 1) {
+      resizeCanvas();
+    }
   }
 
   function updateFloating(dt) {
@@ -1345,6 +1719,8 @@ function onVictory({ score, levelReached }) {
 
   function drawSnake(ox, oy, cell) {
     const segments = state.snake;
+    const snakeColors = activeSnakeColors();
+    const snakeGlow = activeSnakeGlow();
     ctx.save();
     // Blink while the respawn grace window is open so the state is legible.
     if (isInvulnerable() && Math.floor(state.tick / 2) % 2 === 0) {
@@ -1356,9 +1732,9 @@ function onVictory({ score, levelReached }) {
       const py = oy + segment.y * cell;
       const head = i === 0;
       const grad = ctx.createLinearGradient(px, py, px + cell, py + cell);
-      grad.addColorStop(0, head ? "#ffffff" : COLORS.snake[0]);
-      grad.addColorStop(1, head ? COLORS.snake[0] : COLORS.snake[1]);
-      ctx.shadowColor = COLORS.snakeGlow;
+      grad.addColorStop(0, head ? "#ffffff" : snakeColors[0]);
+      grad.addColorStop(1, head ? snakeColors[0] : snakeColors[1]);
+      ctx.shadowColor = snakeGlow;
       ctx.shadowBlur = head ? 18 : 10;
       ctx.fillStyle = grad;
       roundRect(px + 1.5, py + 1.5, cell - 3, cell - 3, cell * 0.28);
@@ -1495,6 +1871,14 @@ function onVictory({ score, levelReached }) {
 
   function resizeCanvas() {
     const rect = canvas.getBoundingClientRect();
+    /* A zero-size rect means the canvas is not laid out yet or is currently
+       hidden (a drawer covering it, a screen not shown yet). Writing 0 into
+       canvas.width wipes the backing store and leaves a blank board even
+       after the element comes back, so keep the last good size instead —
+       the ResizeObserver below fires again with real numbers the moment it
+       has them. */
+    if (rect.width < 1 || rect.height < 1) return;
+
     const scale = Math.max(1, window.devicePixelRatio || 1);
     state.viewWidth = rect.width;
     state.viewHeight = rect.height;
@@ -1518,9 +1902,26 @@ function onVictory({ score, levelReached }) {
     return `Feed the core ${eaten}/${BOSS_SHARDS_PER_CYCLE} charge shards to crack the shield. ${remaining} hit${remaining === 1 ? "" : "s"} to win.`;
   }
 
+  let lastShownScore = 0;
+
   function updateHUD() {
     levelLabel.textContent = state.levelIndex + 1;
-    scoreLabel.textContent = formatNumber(state.score);
+
+    const scoreText = formatNumber(state.score);
+    if (scoreLabel.textContent !== scoreText) {
+      scoreLabel.textContent = scoreText;
+      // Only celebrate going up — losing a life should not look like a win.
+      if (state.score > lastShownScore) {
+        scoreLabel.classList.remove("bump");
+        // Reading offsetWidth forces the class removal to take effect before
+        // it is re-added, which is what lets the animation retrigger on
+        // consecutive pickups instead of only playing once.
+        void scoreLabel.offsetWidth;
+        scoreLabel.classList.add("bump");
+      }
+      lastShownScore = state.score;
+    }
+
     livesLabel.textContent = String(state.lives);
     if (state.mode === "daily") {
       challengeCode.textContent = state.seed;
@@ -1542,6 +1943,11 @@ function onVictory({ score, levelReached }) {
     if (state.currentLevel?.mirror) missionBits.push("Left and right are mirrored on this stage — up and down are normal.");
     if (isPracticeRun()) missionBits.push(`Practice run from level ${state.runStartLevel + 1} — not posted.`);
     missionText.textContent = missionBits.join(" ");
+    // The ticker under the board is the only mission copy visible while the
+    // drawer is closed, which is most of the time.
+    missionTicker.textContent = state.boss
+      ? bossMissionLine()
+      : `${missionBits[0]}${state.timerLeft != null ? ` · ${Math.ceil(state.timerLeft)}s` : ""}`;
     const progress = Math.max(0, Math.min(1, state.missionGoal ? state.mission / state.missionGoal : 0));
     missionFill.style.width = `${Math.floor(progress * 100)}%`;
   }
@@ -1639,6 +2045,7 @@ function onVictory({ score, levelReached }) {
       bestDaily: Math.max(state.bestDaily, previous.bestDaily || 0),
       bestLevel: Math.max(state.bestLevel, state.levelIndex + 1, previous.bestLevel || 1),
       palette: state.palette,
+      skinIndex: state.skinIndex,
       soundEnabled: state.soundEnabled !== false,
       playerName: state.playerName || "",
       checkpoint: state.checkpoint && state.checkpoint.level > 0 ? state.checkpoint : previous.checkpoint || null,
@@ -1672,6 +2079,7 @@ function onVictory({ score, levelReached }) {
     writeSave({
       ...previous,
       palette: state.palette,
+      skinIndex: state.skinIndex,
       soundEnabled: state.soundEnabled !== false,
       playerName: state.playerName || "",
       unlockAll: !!state.unlockAll
@@ -1684,6 +2092,9 @@ function onVictory({ score, levelReached }) {
     state.bestDaily = data.bestDaily || 0;
     state.bestLevel = data.bestLevel || 1;
     state.palette = PALETTES[data.palette] ? data.palette : "neon";
+    const skinIdx = Number(data.skinIndex);
+    state.skinIndex = Number.isInteger(skinIdx) && SKINS[skinIdx] ? skinIdx : 0;
+    state.dailyHistory = Array.isArray(data.dailyHistory) ? data.dailyHistory : [];
     state.soundEnabled = data.soundEnabled !== false;
     state.playerName = typeof data.playerName === "string" ? data.playerName.slice(0, 24) : "";
     state.savedCheckpoint = data.checkpoint && typeof data.checkpoint.level === "number"
@@ -1728,6 +2139,7 @@ function onVictory({ score, levelReached }) {
     lbStatus.textContent = cleaned
       ? `Runs will post as "${cleaned}".`
       : "Set a name and finished runs post automatically.";
+    if (getCurrentUser()) setCloudDisplayName(cleaned);
   }
 
   function setLeaderboardTab(tab) {
@@ -1743,11 +2155,25 @@ function onVictory({ score, levelReached }) {
     return `daily-${stamp}`;
   }
 
+  // Supabase first when a project is configured — it works on a static
+  // deploy with no server.js, which is where the game actually lives once
+  // hosted. /api/scores stays as the fallback for local development without
+  // a Supabase project set up, and for the (unlikely) case the Supabase
+  // fetch itself fails.
   async function refreshLeaderboard() {
     const tab = state.leaderboardTab;
-    const params = new URLSearchParams({ mode: tab });
-    if (tab === "daily") params.set("seed", currentDailySeed());
+    const seed = tab === "daily" ? currentDailySeed() : "campaign";
 
+    if (isSupabaseConfigured) {
+      const cloudScores = await fetchCloudLeaderboard(tab, seed);
+      if (cloudScores) {
+        state.leaderboardOnline = true;
+        renderLeaderboard(cloudScores);
+        return;
+      }
+    }
+
+    const params = new URLSearchParams({ mode: tab, seed });
     try {
       const res = await fetch(`api/scores?${params.toString()}`, { headers: { Accept: "application/json" } });
       if (!res.ok) throw new Error(`status ${res.status}`);
@@ -1759,9 +2185,53 @@ function onVictory({ score, levelReached }) {
       leaderboardList.innerHTML = "";
       const li = document.createElement("li");
       li.className = "lb-empty";
-      li.textContent = "Offline — run server.js to enable the shared leaderboard.";
+      li.textContent = isSupabaseConfigured
+        ? "Could not reach the leaderboard."
+        : "Offline — run server.js to enable the shared leaderboard.";
       leaderboardList.appendChild(li);
     }
+  }
+
+  // Reconciles local campaign progress with the cloud in both directions:
+  // pulls down anything cleared on another device (merged via the same
+  // "higher wins" rule as mergeLevelStats, so it can only ever gain ground),
+  // then pushes the merged result back up so both sides agree. Runs once
+  // per sign-in; incremental per-level pushes happen from
+  // recordLevelCleared instead of re-running this whole reconciliation.
+  async function syncProgressWithCloud() {
+    const cloudStats = await fetchCloudLevelProgress();
+    if (cloudStats) {
+      state.levelStats = mergeLevelStats(state.levelStats, cloudStats);
+      saveProgress();
+      if (levelSelect.classList.contains("is-open")) renderLevelSelect();
+    }
+    syncLevelProgress(state.levelStats);
+  }
+
+  function initAccountUI() {
+    if (!isSupabaseConfigured) return;
+    accountPanel.classList.remove("is-hidden");
+    restoreSession();
+    onAuthChange((user) => {
+      if (user) {
+        accountStatus.textContent = user.is_anonymous
+          ? "Playing as a guest — sign in with Google any time to keep this progress."
+          : `Signed in${user.email ? ` as ${user.email}` : ""}.`;
+        accountActions.classList.add("is-hidden");
+        signOutBtn.classList.remove("is-hidden");
+        syncProgressWithCloud();
+        // Returning from the Google redirect lands back on the welcome
+        // screen with a live session; carry straight on to the game rather
+        // than asking someone who just signed in to sign in again.
+        if (activeScreen === "auth") showScreen("game");
+      } else {
+        accountStatus.textContent = "Playing locally — sign in to sync progress across devices and post to the live leaderboard.";
+        accountActions.classList.remove("is-hidden");
+        signOutBtn.classList.add("is-hidden");
+      }
+      updateProfileUI(user);
+      refreshLeaderboard();
+    });
   }
 
   function renderLeaderboard(scores) {
@@ -1798,6 +2268,99 @@ function onVictory({ score, levelReached }) {
     });
   }
 
+  function renderDailyHistory() {
+    dailyHistoryList.innerHTML = "";
+    const history = state.dailyHistory || [];
+    if (!history.length) {
+      const li = document.createElement("li");
+      li.className = "lb-empty";
+      li.textContent = "No Daily Rift runs yet.";
+      dailyHistoryList.appendChild(li);
+      return;
+    }
+    history.slice(0, 5).forEach((entry) => {
+      const li = document.createElement("li");
+
+      const date = document.createElement("span");
+      date.className = "lb-rank";
+      // "daily-2026-08-12" -> "08-12": full ISO date is too wide for the
+      // narrow rank column this reuses from the leaderboard list styling.
+      date.textContent = entry.seed.replace("daily-", "").slice(5);
+
+      const level = document.createElement("span");
+      level.className = "lb-name";
+      level.textContent = `Level ${entry.level}`;
+
+      const score = document.createElement("span");
+      score.className = "lb-score";
+      score.textContent = formatNumber(entry.score);
+
+      li.append(date, level, score);
+      dailyHistoryList.appendChild(li);
+    });
+  }
+
+  // Local-only history, independent of the online leaderboard: one entry per
+  // daily seed (one per day), keeping the better of two attempts on the same
+  // day rather than appending duplicates. Recorded for every daily run that
+  // scores above zero, including practice runs that never hit the leaderboard.
+  function recordDailyRun(score, levelReached) {
+    if (state.mode !== "daily" || score <= 0) return;
+    const previous = readSave();
+    const history = Array.isArray(previous.dailyHistory) ? previous.dailyHistory.slice() : [];
+    const entry = {
+      seed: state.seed,
+      score: Math.floor(score),
+      level: Math.max(1, Math.min(LEVELS.length, Math.floor(levelReached)))
+    };
+    const existingIndex = history.findIndex((item) => item.seed === entry.seed);
+    if (existingIndex !== -1) {
+      if (entry.score > history[existingIndex].score) history[existingIndex] = entry;
+    } else {
+      history.unshift(entry);
+    }
+    history.sort((a, b) => b.seed.localeCompare(a.seed));
+    const trimmed = history.slice(0, 10);
+    writeSave({ ...previous, dailyHistory: trimmed });
+    state.dailyHistory = trimmed;
+    renderDailyHistory();
+  }
+
+  // Web Share API when the platform has it (mobile browsers, mostly), with a
+  // clipboard-copy fallback everywhere else — mirrors Google Snake's share
+  // button, which behaves the same way. Message adapts to context: a daily
+  // code invites a friend to beat it, anything else brags about the score.
+  async function shareGame() {
+    const url = location.href.split("#")[0];
+    const isDaily = state.mode === "daily";
+    const text = isDaily
+      ? `Beat my Daily Rift run on Neon Serpent 30 — code ${state.seed}, score ${formatNumber(state.score)}.`
+      : `I scored ${formatNumber(state.score)} on Neon Serpent 30 (level ${state.levelIndex + 1}). Can you beat it?`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Neon Serpent 30", text, url });
+        return;
+      } catch {
+        // Cancelled or unsupported mid-call — fall through to clipboard.
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(`${text} ${url}`);
+      state.message = "Share text copied to clipboard.";
+      overlayText.textContent = "Share text copied to clipboard — paste it anywhere.";
+      overlay.classList.add("visible");
+      setTimeout(() => {
+        if (state.running && !state.paused && !state.over && !state.won) {
+          overlay.classList.remove("visible");
+        }
+      }, 1200);
+    } catch {
+      overlayText.textContent = `Clipboard unavailable. ${text} ${url}`;
+      overlay.classList.add("visible");
+    }
+  }
+
   async function submitRun(levelReached) {
     // Only full runs from level 1 count, otherwise starting at level 29 would
     // post a score that nobody could compare against.
@@ -1811,13 +2374,32 @@ function onVictory({ score, levelReached }) {
     }
     if (state.score <= 0) return;
 
-    const payload = {
-      name: state.playerName,
-      score: Math.floor(state.score),
-      level: Math.max(1, Math.min(LEVELS.length, Math.floor(levelReached))),
-      mode: state.mode,
-      seed: state.mode === "daily" ? state.seed : "campaign"
-    };
+    const score = Math.floor(state.score);
+    const level = Math.max(1, Math.min(LEVELS.length, Math.floor(levelReached)));
+    const mode = state.mode;
+    const seed = mode === "daily" ? state.seed : "campaign";
+
+    // Cloud path: only once actually signed in, so an anonymous local
+    // preference name never quietly attaches to a fabricated identity. Local
+    // /api/scores stays the only path when Supabase isn't configured at all
+    // (or has no live user yet), same behaviour as before this existed.
+    if (isSupabaseConfigured && getCurrentUser()) {
+      const { posted, error } = await postRunToCloud({
+        mode,
+        seed,
+        score,
+        level,
+        startedLevel: state.runStartLevel
+      });
+      state.leaderboardOnline = posted;
+      lbStatus.textContent = posted
+        ? "Run posted to the leaderboard."
+        : `Could not post the run${error ? `: ${error}` : "."}`;
+      if (posted) setLeaderboardTab(mode);
+      return;
+    }
+
+    const payload = { name: state.playerName, score, level, mode, seed };
 
     try {
       const res = await fetch("api/scores", {
