@@ -110,6 +110,71 @@ test("speed is constant within a tier and steps up between tiers", () => {
   });
 });
 
+/* A rival that blunders into the side of the player's body is destroyed;
+   one that reaches the player's head still kills the player. This is the
+   only counter-play the hunter has, so both halves are worth pinning. */
+function rivalRig(levelIndex = BOSS_LEVELS ? 24 : 24) {
+  const events = [];
+  const engine = engineAt("campaign", levelIndex, events);
+  const { state } = engine;
+  state.hazards = [];
+  state.powerups = [];
+  state.timerLeft = 999;
+  return { engine, state, events };
+}
+
+test("a rival that hits the player's body is destroyed, not the player", () => {
+  const { engine, state, events } = rivalRig();
+  state.snake = [{ x: 10, y: 10 }, { x: 11, y: 10 }, { x: 12, y: 10 }, { x: 13, y: 10 }, { x: 14, y: 10 }];
+  state.snakeDir = { x: -1, y: 0 };
+  state.nextDir = { x: -1, y: 0 };
+  state.dirQueue.length = 0;
+  // Head directly above a mid-body segment, moving into it.
+  state.enemySnakes = [{ body: [{ x: 12, y: 9 }, { x: 12, y: 8 }], dir: { x: 0, y: 1 }, colorKey: "enemy" }];
+  state.enemyStepAccumulator = 1;
+
+  const livesBefore = state.lives;
+  const scoreBefore = state.score;
+  events.length = 0;
+  engine.step();
+
+  assert.equal(state.enemySnakes.length, 0, "the rival should be destroyed");
+  assert.equal(state.lives, livesBefore, "the player must not lose a life for this");
+  assert.ok(state.score > scoreBefore, "destroying a rival should score");
+  assert.ok(events.some((e) => e.type === "sound" && e.payload === "rivalDown"), "plays its own sound");
+  assert.ok(
+    events.some((e) => e.type === "floating" && e.payload.text === "RIVAL DOWN"),
+    "announces the kill"
+  );
+  assert.ok(events.some((e) => e.type === "burst"), "dissolves visibly");
+});
+
+test("a rival that reaches the player's head still costs a life", () => {
+  const { engine, state } = rivalRig();
+  state.snake = [{ x: 10, y: 10 }, { x: 11, y: 10 }, { x: 12, y: 10 }];
+  state.snakeDir = { x: 1, y: 0 };
+  state.nextDir = { x: 1, y: 0 };
+  state.dirQueue.length = 0;
+  // Converges on the cell the player's head moves into.
+  state.enemySnakes = [{ body: [{ x: 11, y: 9 }, { x: 11, y: 8 }], dir: { x: 0, y: 1 }, colorKey: "enemy" }];
+  state.enemyStepAccumulator = 1;
+
+  const livesBefore = state.lives;
+  engine.step();
+
+  assert.ok(state.lives < livesBefore, "head-on contact is still fatal to the player");
+  assert.equal(state.enemySnakes.length, 1, "and the rival survives it");
+});
+
+test("no level exceeds three drones", () => {
+  for (let i = 0; i < LEVELS.length; i++) {
+    assert.ok(
+      LEVELS[i].hazards <= 3,
+      `level ${i + 1} (${LEVELS[i].name}) has ${LEVELS[i].hazards} drones, cap is 3`
+    );
+  }
+});
+
 test("rival snakes exist only in the final tier, one per level, capped at MAX_RIVAL_SPEED", () => {
   const finalTier = TIERS[TIERS.length - 1];
   LEVELS.forEach((level, i) => {

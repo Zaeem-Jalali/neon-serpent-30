@@ -74,19 +74,28 @@ export const LEVELS = [
   { name: "Prism Panic", desc: "Ring lanes that reward planning your exit early.", target: 6, layout: "rings", walls: 12, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 70, mirror: false, shrink: 0 },
   { name: "Static Siege", desc: "Scattered cover and drones on patrol.", target: 6, layout: "chaos", walls: 9, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 68, mirror: false, shrink: 0 },
   { name: "Inversion", desc: "Mirrored steering returns, on a cleaner board.", target: 6, layout: "labyrinth", walls: 12, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 68, mirror: true, shrink: 0 },
-  { name: "Data Dunes", desc: "The outer edge starts closing in over time.", target: 7, layout: "fortress", walls: 12, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 68, mirror: false, shrink: 88 },
-  { name: "Turbo Tangle", desc: "The arena shrinks while the drones keep patrolling.", target: 7, layout: "maze", walls: 12, hazards: 3, enemies: 0, portals: 1, powerups: 1, timer: 66, mirror: false, shrink: 86 },
-  { name: "Omega Orbit", desc: "Ring barriers, a double portal set, and steady timing.", target: 7, layout: "rings", walls: 14, hazards: 3, enemies: 0, portals: 2, powerups: 1, timer: 66, mirror: false, shrink: 86 },
+  { name: "Data Dunes", desc: "The outer edge starts closing in over time.", target: 7, layout: "fortress", walls: 12, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: 68, mirror: false, shrink: 120 },
+  { name: "Turbo Tangle", desc: "The arena shrinks while the drones keep patrolling.", target: 7, layout: "maze", walls: 12, hazards: 3, enemies: 0, portals: 1, powerups: 1, timer: 66, mirror: false, shrink: 115 },
+  { name: "Omega Orbit", desc: "Ring barriers, a double portal set, and steady timing.", target: 7, layout: "rings", walls: 12, hazards: 3, enemies: 0, portals: 2, powerups: 1, timer: 66, mirror: false, shrink: 115 },
   { name: "The Collapse", desc: "The core is guarded by a cage that breathes — compressing on its own rhythm, not a steady march.", target: 4, layout: "boss", walls: 10, hazards: 2, enemies: 0, portals: 1, powerups: 1, timer: null, mirror: false, shrink: 0, boss: "collapse" },
 
   /* --- Nightmare (7 moves/sec, one rival snake) ---
      The pressure here should come from speed and the single hunter, not from
-     burying the board in walls and drones. */
-  { name: "Synth Spiral", desc: "A rival snake arrives. It moves slower than you — use that.", target: 7, layout: "spiral", walls: 14, hazards: 3, enemies: 1, portals: 2, powerups: 1, timer: 62, mirror: false, shrink: 94 },
-  { name: "Neon Nexus", desc: "One rival, patrolling drones, and a shrinking safe zone.", target: 7, layout: "fortress", walls: 14, hazards: 3, enemies: 1, portals: 2, powerups: 1, timer: 62, mirror: false, shrink: 92 },
-  { name: "Corrupt Core", desc: "Open ground, but the edges are closing and nothing is idle.", target: 8, layout: "chaos", walls: 9, hazards: 4, enemies: 1, portals: 2, powerups: 1, timer: 62, mirror: false, shrink: 92 },
-  { name: "Overclock", desc: "Narrow lanes, hard turns, and a rival cutting you off.", target: 8, layout: "maze", walls: 16, hazards: 4, enemies: 1, portals: 2, powerups: 1, timer: 60, mirror: false, shrink: 90 },
-  { name: "Final Grid", desc: "Every system at once, on ground you can still read.", target: 8, layout: "rings", walls: 16, hazards: 4, enemies: 1, portals: 2, powerups: 1, timer: 60, mirror: false, shrink: 90 },
+     burying the board in walls and drones.
+
+     Rebalanced after play testing showed these were the "closed cage" tier.
+     Measured with tools/openness-probe.mjs: at full closure these boards fell
+     to 135-224 reachable cells while carrying 3-4 drones plus a rival, i.e.
+     23-45 cells of space per threat, against 200+ through the mid game. The
+     shrink interval is ticks-between-steps, so the old 90-94 reached maximum
+     closure roughly 40s into a 60s stage — almost the whole level was played
+     in the collapsed arena. Slowing that to 135-150, capping drones at 3 and
+     thinning the walls gives room to actually manoeuvre. */
+  { name: "Synth Spiral", desc: "A rival snake arrives. It moves slower than you — use that.", target: 7, layout: "spiral", walls: 10, hazards: 3, enemies: 1, portals: 2, powerups: 1, timer: 62, mirror: false, shrink: 150 },
+  { name: "Neon Nexus", desc: "One rival, patrolling drones, and a shrinking safe zone.", target: 7, layout: "fortress", walls: 10, hazards: 3, enemies: 1, portals: 2, powerups: 1, timer: 62, mirror: false, shrink: 145 },
+  { name: "Corrupt Core", desc: "Open ground, but the edges are closing and nothing is idle.", target: 8, layout: "chaos", walls: 6, hazards: 3, enemies: 1, portals: 2, powerups: 1, timer: 62, mirror: false, shrink: 145 },
+  { name: "Overclock", desc: "Narrow lanes, hard turns, and a rival cutting you off.", target: 8, layout: "maze", walls: 11, hazards: 3, enemies: 1, portals: 2, powerups: 1, timer: 60, mirror: false, shrink: 155 },
+  { name: "Final Grid", desc: "Every system at once, on ground you can still read.", target: 8, layout: "rings", walls: 11, hazards: 3, enemies: 1, portals: 2, powerups: 1, timer: 60, mirror: false, shrink: 155 },
   { name: "Singularity Prime", desc: "Everything you have learned, at once: a shielded core, a compressing cage, flipped steering, and a fragment that hunts you while you work.", target: 5, layout: "boss", walls: 6, hazards: 1, enemies: 1, portals: 1, powerups: 1, timer: null, mirror: false, shrink: 0, boss: "singularity" }
 ];
 

@@ -539,6 +539,14 @@ function onVictory({ score, levelReached }) {
           [196, 262, 330, 392, 523, 659].forEach((f, i) => this.tone(f, i * 0.08, 0.3, "square", 0.28));
           this.tone(1046, 0.5, 0.8, "triangle", 0.32);
           break;
+        case "rivalDown":
+          // A descending sweep under a bright hit, so it reads as something
+          // being destroyed rather than something being collected.
+          this.noise(0, 0.3, 0.26);
+          this.tone(880, 0, 0.28, "sawtooth", 0.24, 120);
+          this.tone(1320, 0.04, 0.12, "square", 0.18);
+          this.tone(660, 0.16, 0.22, "triangle", 0.2);
+          break;
         case "ui":
           this.tone(440, 0, 0.05, "sine", 0.16);
           break;

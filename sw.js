@@ -17,7 +17,7 @@
  * Bump CACHE_VERSION whenever a precached file changes; the activate handler
  * deletes every other cache so old assets cannot linger.
  */
-const CACHE_VERSION = "neon-serpent-v4";
+const CACHE_VERSION = "neon-serpent-v5";
 
 const PRECACHE = [
   "./",

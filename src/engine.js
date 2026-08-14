@@ -262,17 +262,30 @@ export function createEngine({ emit = () => {} } = {}) {
       carveGate(centerX + 5, centerY, 1);
       scatterBlocks(level.walls - 10, rng, 3, 2);
     } else if (layout === "rings") {
+      /* Two nested rings, but broken on every side rather than sealed with a
+         single door each. The old version left the inner ring a near-closed
+         box: entering it with a long snake, a drone and a rival about was a
+         commitment with one way out. Eight openings mean a ring is a shape to
+         weave through, not a room to be trapped in. */
       addRect(5, 4, 24, 15);
       addRect(9, 7, 20, 12);
-      carveGate(14, 4, 1);
-      carveGate(5, 9, 1);
-      carveGate(24, 10, 1);
-      carveGate(14, 15, 1);
-      scatterBlocks(level.walls - 12, rng, 4, 2);
+      carveGate(14, 4, 2);
+      carveGate(5, 9, 2);
+      carveGate(24, 10, 2);
+      carveGate(14, 15, 2);
+      carveGate(9, 9, 1);
+      carveGate(20, 10, 1);
+      carveGate(12, 7, 1);
+      carveGate(17, 12, 1);
+      scatterBlocks(level.walls - 12, rng, 3, 2);
     } else if (layout === "maze") {
+      /* Vertical combs with a gap every third row instead of every fifth, so
+         crossing between columns no longer depends on finding one specific
+         hole while something is chasing you. Still reads as a comb, unlike the
+         ring and fortress shapes. */
       for (let x = 4; x < GRID.cols - 4; x += 4) {
         for (let y = 2; y < GRID.rows - 2; y++) {
-          if ((x + y) % 5 !== 0) addWall(x, y);
+          if ((x + y) % 3 !== 0) addWall(x, y);
         }
       }
       carveGate(4, 8, 1);
@@ -283,19 +296,29 @@ export function createEngine({ emit = () => {} } = {}) {
       carveGate(24, 12, 1);
       scatterBlocks(level.walls - 14, rng, 2, 2);
     } else if (layout === "fortress") {
+      /* Keeps the keep-and-curtain-wall silhouette, but the inner keep is now
+         open on two full corners so it reads as cover to duck behind rather
+         than a cell. Distinct from rings: straight corner gaps, not a woven
+         lattice. */
       addRect(7, 5, 22, 14);
       addRect(11, 8, 18, 11);
-      carveGate(14, 5, 1);
-      carveGate(7, 9, 1);
-      carveGate(22, 10, 1);
-      carveGate(14, 14, 1);
-      scatterBlocks(level.walls - 16, rng, 3, 2);
+      carveGate(14, 5, 2);
+      carveGate(7, 9, 2);
+      carveGate(22, 10, 2);
+      carveGate(14, 14, 2);
+      carveGate(11, 8, 2);
+      carveGate(18, 11, 2);
+      scatterBlocks(level.walls - 16, rng, 2, 2);
     } else if (layout === "chaos") {
-      scatterBlocks(level.walls, rng, 3, 4);
-      addLine(6, 5, 12, 5);
-      addLine(18, 14, 24, 14);
-      addLine(11, 7, 11, 13);
-      carveGate(11, 10, 1);
+      /* Clusters were up to 3x4, which on a 30x20 board is a building, not
+         cover — a handful of them cut the arena into pockets. Smaller, more
+         numerous blocks keep the scattered character while leaving lanes
+         between them. */
+      scatterBlocks(level.walls, rng, 2, 2);
+      addLine(6, 5, 11, 5);
+      addLine(19, 14, 24, 14);
+      addLine(11, 7, 11, 12);
+      carveGate(11, 10, 2);
     } else if (layout === "labyrinth") {
       addLine(4, 4, 25, 4);
       addLine(4, 15, 25, 15);
@@ -320,21 +343,30 @@ export function createEngine({ emit = () => {} } = {}) {
       carveGate(14, 9, 1);
       scatterBlocks(level.walls - 12, rng, 3, 2);
     } else if (layout === "spiral") {
+      /* The spiral is the tightest shape in the set — by construction each arm
+         wraps the last, so a single missed turn used to mean running the whole
+         coil back out. Breaking each arm at its midpoint keeps the spiral
+         unmistakably a spiral while giving every arm a shortcut out. */
       let left = 5;
       let top = 4;
       let right = 24;
       let bottom = 15;
+      const breaks = [];
       while (left < right && top < bottom) {
         addLine(left, top, right, top);
         addLine(right, top, right, bottom);
         if (top + 2 <= bottom) addLine(right, bottom, left + 2, bottom);
         if (left + 2 <= right) addLine(left + 2, bottom, left + 2, top + 2);
+        // Remember a midpoint on the top and right arm of each ring.
+        breaks.push([Math.floor((left + right) / 2), top]);
+        breaks.push([right, Math.floor((top + bottom) / 2)]);
         left += 4;
         top += 3;
         right -= 4;
         bottom -= 3;
       }
-      carveGate(14, 8, 1);
+      for (const [gx, gy] of breaks) carveGate(gx, gy, 1);
+      carveGate(14, 8, 2);
       carveGate(18, 11, 1);
       scatterBlocks(level.walls - 10, rng, 2, 2);
     } else if (layout === "boss") {
@@ -1430,6 +1462,35 @@ export function createEngine({ emit = () => {} } = {}) {
     }
   }
 
+  /* Destroys a rival that ran into the player's body.
+   *
+   * Empties the body rather than splicing the array, because moveEnemies is
+   * iterating it — the filter already at the end of that loop then retires
+   * it. The dissolve is emitted segment by segment so the rival visibly
+   * comes apart along its length instead of blinking out.
+   */
+  function destroyRival(enemy) {
+    const segments = enemy.body.slice();
+    const head = segments[0];
+
+    segments.forEach((seg, i) => {
+      emit("burst", { x: seg.x, y: seg.y, color: i === 0 ? "bonus" : "enemy" });
+    });
+    if (head) {
+      emit("floating", { text: "RIVAL DOWN", x: head.x, y: head.y - 1, color: "bonus", life: 46 });
+    }
+    emit("shake", { strength: 7, ticks: 12 });
+    emit("flash", { color: "#a98bff", ticks: 5 });
+    emit("sound", "rivalDown");
+
+    // Worth real points: baiting a hunter into your own tail is a deliberate
+    // play, not an accident, and the tier gives you nothing else to do about it.
+    const multiplier = Math.max(1, state.bonusMultiplier || 1);
+    state.score += (120 + state.levelIndex * 6) * multiplier;
+
+    enemy.body = [];
+  }
+
   function moveEnemies() {
     // Enemies that have been whittled away by shield hits are retired here so
     // the movement loop never dereferences an empty body.
@@ -1459,13 +1520,24 @@ export function createEngine({ emit = () => {} } = {}) {
       enemy.body.unshift(picked.next);
       enemy.body.pop();
 
-      // Snapshot before testing: a shield hit shortens the rival, and mutating
-      // the array we are iterating used to skip segments.
+      /* Contact resolves differently depending on WHERE it lands.
+       *
+       * Running head-first into the player is still fatal to the player —
+       * that is the rival actually catching you. But a rival that blunders
+       * into the side of your body has, in snake terms, crashed into a wall
+       * of your making, so it is the one that dies. That turns a long tail
+       * from pure liability into something you can bait a chasing rival
+       * across, which is the only counter-play the hunter previously had.
+       *
+       * Snapshot before testing: a shield hit shortens the rival, and
+       * mutating the array we are iterating used to skip segments. */
       const segments = enemy.body.slice();
-      const overlaps = !isInvulnerable() && segments.some((segment) =>
-        state.snake.some((s) => s.x === segment.x && s.y === segment.y));
+      const playerHead = state.snake[0];
+      const touchesHead = segments.some((seg) => seg.x === playerHead.x && seg.y === playerHead.y);
+      const touchesBody = segments.some((seg) =>
+        state.snake.some((s, i) => i > 0 && s.x === seg.x && s.y === seg.y));
 
-      if (overlaps) {
+      if (!isInvulnerable() && touchesHead) {
         if (hasShield()) {
           consumeShield();
           emit("sound", "shieldBreak");
@@ -1475,6 +1547,9 @@ export function createEngine({ emit = () => {} } = {}) {
           loseLife("A rival snake caught you");
           return;
         }
+      } else if (touchesBody) {
+        destroyRival(enemy);
+        continue;
       }
     }
 
