@@ -159,6 +159,7 @@
         <button id="playBtn" class="primary">Start Game</button>
         <button id="checkpointBtn" class="secondary is-hidden">Resume at checkpoint</button>
         <button id="overlayLevelsBtn" class="secondary">Choose level</button>
+        <button id="overlayLeaderboardBtn" class="secondary">Leaderboard</button>
         <button id="shareBtn" class="secondary">Share</button>
         <button id="overlayExitBtn" class="secondary">Exit game</button>
       </div>
@@ -166,6 +167,17 @@
   </div>
 
   <!-- ============================ DRAWER ============================= -->
+  <!-- Update prompt. Deliberately non-blocking: a new version must never
+       interrupt a run, so this sits above the board and waits to be answered. -->
+  <div id="updateBanner" class="update-banner" role="status" aria-live="polite">
+    <span class="update-dot" aria-hidden="true"></span>
+    <p class="update-text">A new version is ready.</p>
+    <div class="update-actions">
+      <button id="updateNowBtn" class="update-btn primary-mini">Update</button>
+      <button id="updateLaterBtn" class="update-btn">Later</button>
+    </div>
+  </div>
+
   <div id="navScrim" class="nav-scrim"></div>
   <aside id="navDrawer" class="nav-drawer" aria-label="Menu" aria-hidden="true">
     <header class="drawer-head">
@@ -295,6 +307,12 @@
           <h3>Session</h3>
           <button id="exitGameBtn" class="secondary full">Exit to home screen</button>
           <p class="mini-note">Ends the current run and returns to the welcome screen. Your progress and best scores are already saved.</p>
+        </section>
+
+        <section class="d-card">
+          <h3>Feedback</h3>
+          <a id="feedbackLink" class="secondary full btn-link" href="mailto:jalalizaeem@gmail.com?subject=Neon%20Serpent%2030%20feedback">Send feedback</a>
+          <p class="mini-note">Found a bug or have an idea? This opens an email straight to the developer.</p>
         </section>
 
         <section class="d-card">

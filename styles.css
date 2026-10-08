@@ -884,6 +884,15 @@ body[data-screen="game"] .overlay.visible {
   width: 100%;
 }
 
+/* Lets an <a> sit in the same button rows as real <button> elements
+   (e.g. the Feedback link) without its own display/underline defaults. */
+.btn-link {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
 .touch-controls {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -926,6 +935,102 @@ body:has(.overlay.visible) .touch-controls {
    landscape phone, leaving no touch controls at all. */
 @media (hover: hover) and (pointer: fine) and (min-width: 1024px) {
   .touch-controls { display: none; }
+}
+
+/* ---------------------------------------------------------------------
+ * Update prompt. Sits above the board but never covers it and never blocks
+ * input — declining has to be as easy as accepting, and an in-progress run
+ * must keep running underneath it.
+ * ------------------------------------------------------------------ */
+.update-banner {
+  position: fixed;
+  left: 50%;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 28;
+  transform: translate(-50%, 150%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(430px, calc(100vw - 24px));
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(14, 25, 43, 0.98), rgba(10, 18, 33, 0.98));
+  border: 1px solid rgba(87, 248, 255, 0.32);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  visibility: hidden;
+  transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease, visibility 0s linear 0.36s;
+}
+
+.update-banner.is-visible {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  visibility: visible;
+  transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease, visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-banner {
+    transition: opacity 0.15s linear, visibility 0s;
+    transform: translate(-50%, 0);
+  }
+}
+
+.update-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--mint);
+  box-shadow: 0 0 12px var(--mint);
+  animation: updatePulse 1.8s ease-in-out infinite;
+}
+
+@keyframes updatePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+
+.update-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.update-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+.update-btn {
+  padding: 9px 14px;
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: transform 0.14s ease, background 0.14s ease;
+}
+
+.update-btn:active {
+  transform: scale(0.95);
+}
+
+.update-btn.primary-mini {
+  color: #04121c;
+  background: linear-gradient(135deg, var(--cyan), var(--mint));
+  border-color: transparent;
+}
+
+@media (max-width: 460px) {
+  .update-banner { flex-wrap: wrap; }
+  .update-text { flex: 1 1 100%; }
+  .update-actions { flex: 1 1 100%; }
+  .update-btn { flex: 1; }
 }
 
 /* ---------------------------------------------------------------------

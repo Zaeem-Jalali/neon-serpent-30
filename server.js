@@ -46,6 +46,12 @@ const MAX_LEVEL = 30;
 const MAX_SCORE = 10_000_000;
 const SEED_PATTERN = /^[A-Za-z0-9:_-]{1,40}$/;
 
+/* Same reasoning and same generous floor as the Postgres constraint in
+ * supabase/schema.sql — this is the fallback leaderboard used when Supabase
+ * isn't configured, so it needs the same basic plausibility check rather
+ * than being the softer, unvalidated path by omission. */
+const MIN_MS_PER_LEVEL = 1500;
+
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -113,6 +119,21 @@ function validateEntry(body) {
   const level = Number(body.level);
   if (!Number.isFinite(level) || level < 1 || level > MAX_LEVEL) {
     return { error: "Level out of range." };
+  }
+
+  // Optional: absent on requests from a client that predates this check.
+  // Present, it must be at least large enough to have plausibly cleared
+  // that many levels — see the matching constraint in supabase/schema.sql.
+  const startedLevel = Number.isFinite(Number(body.startedLevel)) ? Number(body.startedLevel) : 0;
+  const durationMs = body.durationMs == null ? null : Number(body.durationMs);
+  if (durationMs != null) {
+    if (!Number.isFinite(durationMs) || durationMs < 0) {
+      return { error: "Invalid duration." };
+    }
+    const minDuration = Math.max(0, level - startedLevel) * MIN_MS_PER_LEVEL;
+    if (durationMs < minDuration) {
+      return { error: "Run duration too short for the levels reached." };
+    }
   }
 
   const mode = body.mode === "daily" ? "daily" : "campaign";

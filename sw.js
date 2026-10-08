@@ -44,13 +44,20 @@ const PRECACHE = [
 ];
 
 self.addEventListener("install", (event) => {
+  /* No self.skipWaiting() here. A worker with no previous controller (the
+   * very first install for a client) activates on its own once installed —
+   * there is nothing to wait for. A worker installing over an existing
+   * controller is exactly the case sw-register.js wants to hold in
+   * "waiting": it only proceeds once the message handler below hears from
+   * the player. Calling skipWaiting() unconditionally, as this used to,
+   * activated every update immediately regardless of that choice.
+   */
   event.waitUntil(
     caches
       .open(CACHE_VERSION)
       // Individual puts rather than addAll: one missing optional asset should
       // not abort the whole installation.
       .then((cache) => Promise.allSettled(PRECACHE.map((url) => cache.add(url))))
-      .then(() => self.skipWaiting())
   );
 });
 

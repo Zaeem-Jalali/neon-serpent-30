@@ -102,6 +102,24 @@ create policy "users insert their own runs"
 create index if not exists runs_leaderboard_idx on public.runs (mode, seed, score desc);
 create index if not exists runs_user_idx on public.runs (user_id, created_at desc);
 
+/* Basic plausibility floor on submitted runs.
+ *
+ * RLS proves WHO submitted a row; it says nothing about whether the run was
+ * actually played. Score/level are self-reported by the client, and nothing
+ * server-side has ever checked whether the elapsed time was even physically
+ * possible — a fabricated row claiming level 30 in a handful of milliseconds
+ * would sail straight onto a public leaderboard. duration_ms is optional
+ * (older/unpatched clients still insert rows without it, and a null skips
+ * this check entirely) but once present it must be at least large enough to
+ * have cleared that many levels. 1500ms per level is deliberately generous —
+ * the fastest tier moves at 7 cells/sec and no level is anywhere near that
+ * trivial to clear — so this is a floor against obviously fabricated rows,
+ * not a tight anti-cheat model, and should never reject a genuine run.
+ */
+alter table public.runs drop constraint if exists runs_duration_plausible;
+alter table public.runs add constraint runs_duration_plausible
+  check (duration_ms is null or duration_ms >= greatest(0, level_reached - started_level) * 1500);
+
 /* Server-side rate limit on run submissions.
  *
  * RLS decides WHO may write a row; it says nothing about HOW OFTEN. Without
