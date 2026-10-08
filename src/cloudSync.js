@@ -138,7 +138,7 @@ export async function fetchCloudLevelProgress() {
   return stats;
 }
 
-export async function postRunToCloud({ mode, seed, score, level, startedLevel }) {
+export async function postRunToCloud({ mode, seed, score, level, startedLevel, durationMs }) {
   const c = await ensureClient();
   if (!c || !currentUser) return { posted: false };
   const { error } = await c.from("runs").insert({
@@ -147,7 +147,8 @@ export async function postRunToCloud({ mode, seed, score, level, startedLevel })
     seed,
     score,
     level_reached: level,
-    started_level: startedLevel
+    started_level: startedLevel,
+    duration_ms: Number.isFinite(durationMs) ? Math.floor(durationMs) : null
   });
   return { posted: !error, error: error ? error.message : null };
 }

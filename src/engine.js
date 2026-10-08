@@ -74,6 +74,14 @@ export function createEngine({ emit = () => {} } = {}) {
     message: "Tap Start Game to begin.",
     checkpoint: null,
     runStartLevel: 0,
+    // Wall-clock timestamp the current run began, in ms. Bookkeeping only —
+    // never read by the simulation itself — so the leaderboard can reject a
+    // submitted score that could not possibly have taken as long as it claims.
+    runStartedAt: 0,
+    // True when this run was resumed from a checkpoint. The timer restarts at the
+    // resume point but the run still counts from level 1, so its duration cannot
+    // be checked against the leaderboard's per-level floor and is not submitted.
+    resumedRun: false,
     // null outside boss levels. See the "Boss encounters" section below.
     boss: null,
     bossCharges: [],
@@ -1846,6 +1854,8 @@ export function createEngine({ emit = () => {} } = {}) {
     state.running = true;
     state.over = false;
     state.won = false;
+    state.runStartedAt = Date.now();
+    state.resumedRun = false;
     emit("clearEffects");
     state.checkpoint = null;
     reseedRun();

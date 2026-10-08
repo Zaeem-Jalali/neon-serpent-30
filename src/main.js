@@ -221,7 +221,11 @@ function onVictory({ score, levelReached }) {
   const consentRow = document.getElementById("consentRow");
   const consentCheck = document.getElementById("consentCheck");
   const overlayCloseBtn = document.getElementById("overlayCloseBtn");
+  const overlayLeaderboardBtn = document.getElementById("overlayLeaderboardBtn");
   const exitGameBtn = document.getElementById("exitGameBtn");
+  const updateBanner = document.getElementById("updateBanner");
+  const updateNowBtn = document.getElementById("updateNowBtn");
+  const updateLaterBtn = document.getElementById("updateLaterBtn");
   const authScreen = document.getElementById("authScreen");
   const authGoogleBtn = document.getElementById("authGoogleBtn");
   const authGuestBtn = document.getElementById("authGuestBtn");
@@ -616,6 +620,19 @@ function onVictory({ score, levelReached }) {
     welcomeGreeting.textContent = GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
   }
 
+  // The game-over/pause overlay's Leaderboard and Choose level buttons hide the overlay
+  // while a panel is open. Remember that, so closing the panel brings the overlay back
+  // instead of leaving a stopped board with no way to continue.
+  let reopenOverlayOnClose = false;
+
+  function restoreOverlayIfNeeded() {
+    if (!reopenOverlayOnClose) return;
+    reopenOverlayOnClose = false;
+    if (!state.running || state.paused || state.over || state.won) {
+      overlay.classList.add("visible");
+    }
+  }
+
   function openDrawer() {
     document.body.classList.add("nav-open");
     navDrawer.setAttribute("aria-hidden", "false");
@@ -628,6 +645,7 @@ function onVictory({ score, levelReached }) {
     document.body.classList.remove("nav-open");
     navDrawer.setAttribute("aria-hidden", "true");
     navToggle.setAttribute("aria-expanded", "false");
+    restoreOverlayIfNeeded();
   }
 
   function toggleDrawer() {
@@ -726,6 +744,36 @@ function onVictory({ score, levelReached }) {
     showScreen("welcome");
     pickGreeting();
   }
+
+  /* Update prompt.
+   *
+   * sw-register.js leaves a newly installed version in the waiting state and
+   * fires this event instead of activating it, so applying the update is the
+   * player's call. Applying reloads the page, which is precisely why it must
+   * not happen on its own: a deploy landing mid-run used to take the run
+   * with it.
+   */
+  let pendingUpdate = null;
+
+  window.addEventListener("sw-update-ready", (event) => {
+    pendingUpdate = event.detail;
+    updateBanner.classList.add("is-visible");
+  });
+
+  updateNowBtn.addEventListener("click", () => {
+    audio.play("ui");
+    updateBanner.classList.remove("is-visible");
+    // Bank progress first: applying the update reloads the page.
+    saveProgress();
+    if (pendingUpdate) pendingUpdate.apply();
+  });
+
+  updateLaterBtn.addEventListener("click", () => {
+    audio.play("ui");
+    updateBanner.classList.remove("is-visible");
+    // The waiting worker stays put and takes over on the next natural
+    // visit, so declining costs nothing and needs no follow-up nag.
+  });
 
   function updateProfileUI(user) {
     const name = state.playerName || (user && !user.is_anonymous ? "Signed in" : "Guest");
@@ -839,6 +887,13 @@ function onVictory({ score, levelReached }) {
     overlay.classList.remove("visible");
   });
 
+  overlayLeaderboardBtn.addEventListener("click", () => {
+    reopenOverlayOnClose = true;
+    overlay.classList.remove("visible");
+    openDrawer();
+    selectTab(1);
+  });
+
   exitGameBtn.addEventListener("click", exitToWelcome);
 
   authGoogleBtn.addEventListener("click", async () => {
@@ -905,7 +960,11 @@ function onVictory({ score, levelReached }) {
   lbCampaignTab.addEventListener("click", () => setLeaderboardTab("campaign"));
   lbDailyTab.addEventListener("click", () => setLeaderboardTab("daily"));
   levelsBtn.addEventListener("click", openLevelSelect);
-  overlayLevelsBtn.addEventListener("click", openLevelSelect);
+  overlayLevelsBtn.addEventListener("click", () => {
+    reopenOverlayOnClose = true;
+    overlay.classList.remove("visible");
+    openLevelSelect();
+  });
   lsCloseBtn.addEventListener("click", closeLevelSelect);
   levelSelect.addEventListener("click", (event) => {
     // Click-outside dismiss.
@@ -955,6 +1014,7 @@ function onVictory({ score, levelReached }) {
 
   function closeLevelSelect() {
     levelSelect.classList.remove("is-open");
+    restoreOverlayIfNeeded();
   }
 
   function renderLevelSelect() {
@@ -1265,6 +1325,11 @@ function onVictory({ score, levelReached }) {
     state.lives = Math.max(1, cp.lives || 1);
     state.accumulator = 0;
     state.tick = 0;
+    // The timer restarts at the resume point, but the run still counts from level 1,
+    // so the leaderboard's duration floor (level x 1.5s) would wrongly reject it.
+    // Mark it resumed so no duration is submitted for this run.
+    state.runStartedAt = Date.now();
+    state.resumedRun = true;
     state.running = true;
     state.paused = false;
     state.over = false;
@@ -2473,6 +2538,7 @@ function onVictory({ score, levelReached }) {
     const level = Math.max(1, Math.min(LEVELS.length, Math.floor(levelReached)));
     const mode = state.mode;
     const seed = mode === "daily" ? state.seed : "campaign";
+    const durationMs = state.runStartedAt && !state.resumedRun ? Math.max(0, Date.now() - state.runStartedAt) : null;
 
     // Cloud path: only once actually signed in, so an anonymous local
     // preference name never quietly attaches to a fabricated identity. Local
@@ -2484,7 +2550,8 @@ function onVictory({ score, levelReached }) {
         seed,
         score,
         level,
-        startedLevel: state.runStartLevel
+        startedLevel: state.runStartLevel,
+        durationMs
       });
       state.leaderboardOnline = posted;
       lbStatus.textContent = posted
@@ -2494,7 +2561,15 @@ function onVictory({ score, levelReached }) {
       return;
     }
 
-    const payload = { name: state.playerName, score, level, mode, seed };
+    const payload = {
+      name: state.playerName,
+      score,
+      level,
+      mode,
+      seed,
+      startedLevel: state.runStartLevel,
+      durationMs
+    };
 
     try {
       const res = await fetch("api/scores", {
