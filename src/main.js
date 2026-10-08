@@ -620,6 +620,19 @@ function onVictory({ score, levelReached }) {
     welcomeGreeting.textContent = GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
   }
 
+  // The game-over/pause overlay's Leaderboard and Choose level buttons hide the overlay
+  // while a panel is open. Remember that, so closing the panel brings the overlay back
+  // instead of leaving a stopped board with no way to continue.
+  let reopenOverlayOnClose = false;
+
+  function restoreOverlayIfNeeded() {
+    if (!reopenOverlayOnClose) return;
+    reopenOverlayOnClose = false;
+    if (!state.running || state.paused || state.over || state.won) {
+      overlay.classList.add("visible");
+    }
+  }
+
   function openDrawer() {
     document.body.classList.add("nav-open");
     navDrawer.setAttribute("aria-hidden", "false");
@@ -632,6 +645,7 @@ function onVictory({ score, levelReached }) {
     document.body.classList.remove("nav-open");
     navDrawer.setAttribute("aria-hidden", "true");
     navToggle.setAttribute("aria-expanded", "false");
+    restoreOverlayIfNeeded();
   }
 
   function toggleDrawer() {
@@ -874,6 +888,7 @@ function onVictory({ score, levelReached }) {
   });
 
   overlayLeaderboardBtn.addEventListener("click", () => {
+    reopenOverlayOnClose = true;
     overlay.classList.remove("visible");
     openDrawer();
     selectTab(1);
@@ -946,6 +961,7 @@ function onVictory({ score, levelReached }) {
   lbDailyTab.addEventListener("click", () => setLeaderboardTab("daily"));
   levelsBtn.addEventListener("click", openLevelSelect);
   overlayLevelsBtn.addEventListener("click", () => {
+    reopenOverlayOnClose = true;
     overlay.classList.remove("visible");
     openLevelSelect();
   });
@@ -998,6 +1014,7 @@ function onVictory({ score, levelReached }) {
 
   function closeLevelSelect() {
     levelSelect.classList.remove("is-open");
+    restoreOverlayIfNeeded();
   }
 
   function renderLevelSelect() {
@@ -1308,10 +1325,11 @@ function onVictory({ score, levelReached }) {
     state.lives = Math.max(1, cp.lives || 1);
     state.accumulator = 0;
     state.tick = 0;
-    // Measuring from the resume point undercounts total play time, but that
-    // only makes the leaderboard's duration floor more permissive, never
-    // less — safe, unlike inheriting a stale or zeroed timestamp.
+    // The timer restarts at the resume point, but the run still counts from level 1,
+    // so the leaderboard's duration floor (level x 1.5s) would wrongly reject it.
+    // Mark it resumed so no duration is submitted for this run.
     state.runStartedAt = Date.now();
+    state.resumedRun = true;
     state.running = true;
     state.paused = false;
     state.over = false;
@@ -2520,7 +2538,7 @@ function onVictory({ score, levelReached }) {
     const level = Math.max(1, Math.min(LEVELS.length, Math.floor(levelReached)));
     const mode = state.mode;
     const seed = mode === "daily" ? state.seed : "campaign";
-    const durationMs = state.runStartedAt ? Math.max(0, Date.now() - state.runStartedAt) : null;
+    const durationMs = state.runStartedAt && !state.resumedRun ? Math.max(0, Date.now() - state.runStartedAt) : null;
 
     // Cloud path: only once actually signed in, so an anonymous local
     // preference name never quietly attaches to a fabricated identity. Local
